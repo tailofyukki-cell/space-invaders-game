@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Invaders - インベーダーゲーム</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="title-screen" class="screen">
+            <h1>👾 SPACE INVADERS 👾</h1>
+            <div class="instructions">
+                <h2>操作方法</h2>
+                <p><strong>PC:</strong> ← → キーで移動、Spaceキーで発射</p>
+                <p><strong>スマホ:</strong> 画面左右タップで移動、中央タップで発射</p>
+            </div>
+            <button id="start-btn" class="game-btn">START GAME</button>
+        </div>
+
+        <div id="game-screen" class="screen hidden">
+            <div id="game-info">
+                <div id="score">SCORE: 0</div>
+                <div id="lives">LIVES: ❤️❤️❤️</div>
+            </div>
+            <canvas id="game-canvas"></canvas>
+        </div>
+
+        <div id="result-screen" class="screen hidden">
+            <h1 id="result-title">GAME OVER</h1>
+            <p id="final-score">SCORE: 0</p>
+            <button id="retry-btn" class="game-btn">RETRY</button>
+            <button id="title-btn" class="game-btn">TITLE</button>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

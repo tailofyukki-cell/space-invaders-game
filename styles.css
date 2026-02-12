@@ -1,0 +1,158 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+    color: #00ff00;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    width: 100%;
+    max-width: 800px;
+    padding: 20px;
+}
+
+.screen {
+    text-align: center;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* タイトル画面 */
+#title-screen h1 {
+    font-size: 3rem;
+    margin-bottom: 2rem;
+    text-shadow: 0 0 20px #00ff00;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.instructions {
+    background: rgba(0, 255, 0, 0.1);
+    border: 2px solid #00ff00;
+    padding: 1.5rem;
+    margin: 2rem auto;
+    max-width: 500px;
+    border-radius: 10px;
+}
+
+.instructions h2 {
+    margin-bottom: 1rem;
+    font-size: 1.5rem;
+}
+
+.instructions p {
+    margin: 0.5rem 0;
+    font-size: 1rem;
+}
+
+.game-btn {
+    background: #00ff00;
+    color: #000;
+    border: none;
+    padding: 15px 40px;
+    font-size: 1.5rem;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 10px;
+    border-radius: 5px;
+    transition: all 0.3s;
+}
+
+.game-btn:hover {
+    background: #00cc00;
+    transform: scale(1.05);
+    box-shadow: 0 0 20px #00ff00;
+}
+
+.game-btn:active {
+    transform: scale(0.95);
+}
+
+/* ゲーム画面 */
+#game-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#game-info {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    max-width: 800px;
+    margin-bottom: 10px;
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#game-canvas {
+    border: 3px solid #00ff00;
+    background: #000;
+    box-shadow: 0 0 30px rgba(0, 255, 0, 0.5);
+    display: block;
+    max-width: 100%;
+    height: auto;
+}
+
+/* 結果画面 */
+#result-screen h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    text-shadow: 0 0 20px #ff0000;
+}
+
+#result-screen.victory h1 {
+    color: #ffff00;
+    text-shadow: 0 0 20px #ffff00;
+}
+
+#final-score {
+    font-size: 2rem;
+    margin: 2rem 0;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 600px) {
+    #title-screen h1 {
+        font-size: 2rem;
+    }
+    
+    .instructions {
+        font-size: 0.9rem;
+        padding: 1rem;
+    }
+    
+    .game-btn {
+        font-size: 1.2rem;
+        padding: 12px 30px;
+    }
+    
+    #game-info {
+        font-size: 1rem;
+    }
+    
+    #result-screen h1 {
+        font-size: 2rem;
+    }
+    
+    #final-score {
+        font-size: 1.5rem;
+    }
+}
