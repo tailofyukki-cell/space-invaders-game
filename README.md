@@ -37,12 +37,12 @@
 
 ### オンラインでプレイ
 GitHub Pagesで公開されています:
-**[ゲームをプレイする](https://[YOUR_GITHUB_USERNAME].github.io/space-invaders-game/)**
+**[ゲームをプレイする](https://tailofyukki-cell.github.io/space-invaders-game/)**
 
 ### ローカルで実行
 1. このリポジトリをクローン:
 ```bash
-git clone https://github.com/[YOUR_GITHUB_USERNAME]/space-invaders-game.git
+git clone https://github.com/tailofyukki-cell/space-invaders-game.git
 cd space-invaders-game
 ```
 
