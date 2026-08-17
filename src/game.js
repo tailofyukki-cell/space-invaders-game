@@ -1,4 +1,4 @@
-import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, clamp, rand, rectsOverlap } from './config.js';
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
 import { Barrier, Boss, Enemy, Particle, Player } from './entities.js';
 
 export class InputManager {
@@ -136,7 +136,8 @@ export class GameWorld {
     this.stage = STAGES[0];
     this.waveIndex = 0;
     this.waveDelay = 0;
-    this.player = new Player();
+    this.difficulty = getDifficulty(this.getSettings().difficulty);
+    this.player = new Player(this.difficulty);
     this.enemies = [];
     this.projectiles = [];
     this.particles = [];
@@ -171,16 +172,20 @@ export class GameWorld {
     this.audio.unlock();
     this.reset();
     this.state = 'intro';
-    this.highScore = Number(localStorage.getItem('kagekiri-high-score') || 0);
+    this.highScore = Number(localStorage.getItem(this.highScoreKey()) || 0);
     this.createBarriers();
-    this.banner = { title: this.stage.name, text: this.stage.intro, time: 2.4, maxTime: 2.4 };
-    this.onMessage?.('結界展開。迎撃を開始します。', 'info');
+    this.banner = { title: `${this.stage.name} — ${this.difficulty.label}`, text: this.stage.intro, time: 2.4, maxTime: 2.4 };
+    this.onMessage?.(`${this.difficulty.label}任務を開始します。結界を維持してください。`, 'info');
     this.onStateChange?.('playing');
     this.ensureLoop();
   }
 
   createBarriers() {
-    this.barriers = [150, 340, 530, 720].map((x) => new Barrier(x));
+    this.barriers = [150, 340, 530, 720].map((x) => new Barrier(x, this.difficulty));
+  }
+
+  highScoreKey() {
+    return `${STORAGE_KEYS.highScore}-${this.difficulty.key}`;
   }
 
   ensureLoop() {
@@ -247,7 +252,7 @@ export class GameWorld {
     if (active.length === 0) return;
     const left = Math.min(...active.map((enemy) => enemy.x));
     const right = Math.max(...active.map((enemy) => enemy.x + enemy.w));
-    const speed = this.formation.speed + (this.waveIndex * 7) + Math.min(55, (48 - active.length) * 1.1);
+    const speed = (this.formation.speed + (this.waveIndex * 7) + Math.min(55, (48 - active.length) * 1.1)) * this.difficulty.formationSpeed;
     if (right >= GAME_WIDTH - 48 && this.formation.direction > 0) {
       this.formation.direction = -1;
       this.formation.drop += 13;
@@ -369,10 +374,10 @@ export class GameWorld {
     const died = enemy.hit(damage);
     this.addParticles(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, enemy.type.accent, died ? 22 : 6, { life: died ? 0.6 : 0.2, size: died ? 4 : 2 });
     if (!died) return;
-    this.score += Math.round(enemy.value * (1 + Math.min(this.combo, 75) * 0.012));
+    this.score += Math.round(enemy.value * this.difficulty.scoreMultiplier * (1 + Math.min(this.combo, 75) * 0.012));
     this.combo += 1;
     this.comboTimer = 2.5;
-    this.player.energy = clamp(this.player.energy + (skill ? 7 : 9), 0, this.player.maxEnergy);
+    this.player.energy = clamp(this.player.energy + (skill ? 7 : 9) * this.difficulty.energyGain, 0, this.player.maxEnergy);
     this.audio.destroy();
   }
 
@@ -380,7 +385,7 @@ export class GameWorld {
     const died = this.boss.hit(damage);
     this.addParticles(this.boss.x + this.boss.w / 2, this.boss.y + this.boss.h / 2, skill ? COLORS.cyan : COLORS.magenta, died ? 100 : 10, { life: died ? 1.2 : 0.3, size: died ? 6 : 3 });
     if (!died) return;
-    this.score += this.boss.score + Math.round(this.combo * 35);
+    this.score += Math.round((this.boss.score + this.combo * 35) * this.difficulty.scoreMultiplier);
     this.audio.clear();
     this.shake = 1;
     this.flash = 0.6;
@@ -423,7 +428,7 @@ export class GameWorld {
     let slot = 0;
     for (let row = 0; row < spec.rows; row += 1) {
       for (let col = 0; col < spec.cols; col += 1) {
-        this.enemies.push(new Enemy(spec.type, startX + col * spec.gapX, startY + row * spec.gapY, slot, formationWidth));
+        this.enemies.push(new Enemy(spec.type, startX + col * spec.gapX, startY + row * spec.gapY, slot, formationWidth, this.difficulty));
         slot += 1;
       }
     }
@@ -433,7 +438,7 @@ export class GameWorld {
 
   spawnBoss() {
     this.state = 'boss';
-    this.boss = new Boss(this.stage.boss);
+    this.boss = new Boss(this.stage.boss, this.difficulty);
     this.onMessage?.('紅月ノヲロチを確認。攻撃パターンを見極めてください。', 'danger');
   }
 
@@ -441,10 +446,10 @@ export class GameWorld {
     if (this.state === 'gameOver' || this.state === 'clear') return;
     this.state = result;
     this.input.clear();
-    const currentHighScore = Number(localStorage.getItem('kagekiri-high-score') || 0);
+    const currentHighScore = Number(localStorage.getItem(this.highScoreKey()) || 0);
     const isNewRecord = this.score > currentHighScore;
-    if (isNewRecord) localStorage.setItem('kagekiri-high-score', String(this.score));
-    this.onFinish?.({ result, score: this.score, highScore: Math.max(this.score, currentHighScore), isNewRecord, wave: this.waveIndex, combo: this.combo });
+    if (isNewRecord) localStorage.setItem(this.highScoreKey(), String(this.score));
+    this.onFinish?.({ result, score: this.score, highScore: Math.max(this.score, currentHighScore), isNewRecord, wave: this.waveIndex, combo: this.combo, difficulty: this.difficulty });
   }
 
   togglePause() {
@@ -472,6 +477,7 @@ export class GameWorld {
       comboTimer: this.comboTimer,
       wave: Math.min(this.waveIndex + (this.state === 'boss' ? 1 : 0), this.stage.waves.length + 1),
       boss: this.boss && !this.boss.dead ? { hp: this.boss.hp, maxHp: this.boss.maxHp, name: this.boss.name } : null,
+      difficulty: this.difficulty,
       state: this.state,
     });
   }
@@ -858,6 +864,9 @@ class CanvasRenderer {
     ctx.font = '700 20px "Rajdhani", sans-serif';
     ctx.fillStyle = COLORS.paper;
     ctx.fillText(String(world.score).padStart(7, '0'), 98, 35);
+    ctx.font = '700 10px "Noto Sans JP", sans-serif';
+    ctx.fillStyle = world.difficulty.key === 'hard' ? COLORS.magenta : world.difficulty.key === 'easy' ? COLORS.gold : COLORS.cyan;
+    ctx.fillText(`難度: ${world.difficulty.english}`, 26, 66);
 
     ctx.font = '600 12px "Noto Sans JP", sans-serif';
     ctx.fillStyle = COLORS.muted;

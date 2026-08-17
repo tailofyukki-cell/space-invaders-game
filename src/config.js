@@ -24,7 +24,81 @@ export const STORAGE_KEYS = {
 export const DEFAULT_SETTINGS = {
   sound: 0.55,
   screenShake: true,
+  difficulty: 'easy',
 };
+
+export const DIFFICULTIES = {
+  easy: {
+    key: 'easy',
+    label: '見習い',
+    english: 'EASY',
+    shortLabel: '見習い / EASY',
+    description: 'HPが多く、敵弾はゆるやか。結界解放をすぐ使える。',
+    playerHp: 7,
+    playerSpeed: 1.09,
+    invincibility: 1.55,
+    playerDamage: 1.2,
+    enemyHp: 0.6,
+    enemyFireRate: 0.7,
+    enemyShotSpeed: 0.78,
+    enemyDiveChance: 0.45,
+    formationSpeed: 0.78,
+    bossHp: 0.7,
+    bossFireRate: 0.72,
+    bossShotCount: 0.75,
+    energyGain: 1.45,
+    barrierHp: 1.35,
+    scoreMultiplier: 0.75,
+  },
+  normal: {
+    key: 'normal',
+    label: '守護者',
+    english: 'NORMAL',
+    shortLabel: '守護者 / NORMAL',
+    description: '敵弾を見極め、コンボを狙う標準的な結界任務。',
+    playerHp: 5,
+    playerSpeed: 1,
+    invincibility: 1.1,
+    playerDamage: 1,
+    enemyHp: 1,
+    enemyFireRate: 1,
+    enemyShotSpeed: 1,
+    enemyDiveChance: 1,
+    formationSpeed: 1,
+    bossHp: 1,
+    bossFireRate: 1,
+    bossShotCount: 1,
+    energyGain: 1,
+    barrierHp: 1,
+    scoreMultiplier: 1,
+  },
+  hard: {
+    key: 'hard',
+    label: '修羅',
+    english: 'HARD',
+    shortLabel: '修羅 / HARD',
+    description: '高速弾幕と強化された穢機に挑む、熟練者向け任務。',
+    playerHp: 3,
+    playerSpeed: 0.97,
+    invincibility: 0.8,
+    playerDamage: 0.95,
+    enemyHp: 1.35,
+    enemyFireRate: 1.35,
+    enemyShotSpeed: 1.18,
+    enemyDiveChance: 1.65,
+    formationSpeed: 1.25,
+    bossHp: 1.35,
+    bossFireRate: 1.28,
+    bossShotCount: 1.25,
+    energyGain: 0.78,
+    barrierHp: 0.85,
+    scoreMultiplier: 1.35,
+  },
+};
+
+export function getDifficulty(key) {
+  return DIFFICULTIES[key] || DIFFICULTIES.easy;
+}
 
 export const ENEMY_TYPES = {
   oni: {

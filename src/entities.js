@@ -31,17 +31,20 @@ export class Projectile {
 }
 
 export class Player {
-  constructor() {
+  constructor(difficulty) {
+    this.difficulty = difficulty;
     this.w = 46;
     this.h = 54;
     this.x = GAME_WIDTH / 2 - this.w / 2;
     this.y = GAME_HEIGHT - 88;
-    this.speed = 390;
-    this.maxHp = 5;
+    this.speed = 390 * difficulty.playerSpeed;
+    this.maxHp = difficulty.playerHp;
     this.hp = this.maxHp;
     this.fireCooldown = 0;
     this.fireInterval = 0.17;
+    this.shotDamage = 1.2 * difficulty.playerDamage;
     this.invincible = 0;
+    this.invincibilityDuration = difficulty.invincibility;
     this.energy = 0;
     this.maxEnergy = 100;
     this.skillCooldown = 0;
@@ -67,8 +70,8 @@ export class Player {
   fire() {
     this.fireCooldown = this.fireInterval;
     return [
-      new Projectile({ x: this.x + 10, y: this.y - 4, vx: -60, vy: -620, faction: 'player', style: 'ofuda', damage: 1.2 }),
-      new Projectile({ x: this.x + this.w - 18, y: this.y - 4, vx: 60, vy: -620, faction: 'player', style: 'ofuda', damage: 1.2 }),
+      new Projectile({ x: this.x + 10, y: this.y - 4, vx: -60, vy: -620, faction: 'player', style: 'ofuda', damage: this.shotDamage }),
+      new Projectile({ x: this.x + this.w - 18, y: this.y - 4, vx: 60, vy: -620, faction: 'player', style: 'ofuda', damage: this.shotDamage }),
     ];
   }
 
@@ -85,16 +88,17 @@ export class Player {
   takeDamage(amount) {
     if (this.invincible > 0 || this.dead) return false;
     this.hp = Math.max(0, this.hp - amount);
-    this.invincible = 1.1;
+    this.invincible = this.invincibilityDuration;
     if (this.hp <= 0) this.dead = true;
     return true;
   }
 }
 
 export class Enemy {
-  constructor(typeKey, x, y, slot, formationWidth) {
+  constructor(typeKey, x, y, slot, formationWidth, difficulty) {
     this.typeKey = typeKey;
     this.type = ENEMY_TYPES[typeKey];
+    this.difficulty = difficulty;
     this.x = x;
     this.y = y;
     this.homeX = x;
@@ -103,11 +107,11 @@ export class Enemy {
     this.formationWidth = formationWidth;
     this.w = 42;
     this.h = 36;
-    this.hp = this.type.hp;
-    this.maxHp = this.type.hp;
+    this.hp = Math.max(1, Math.round(this.type.hp * difficulty.enemyHp));
+    this.maxHp = this.hp;
     this.dead = false;
     this.t = rand(0, 6.28);
-    this.fireTimer = rand(0.3, 1.5) / this.type.fireRate;
+    this.fireTimer = rand(0.3, 1.5) / (this.type.fireRate * difficulty.enemyFireRate);
     this.diving = false;
     this.diveTime = 0;
     this.diveOrigin = { x, y };
@@ -136,7 +140,7 @@ export class Enemy {
     const bob = Math.sin(this.t * 2.4 + this.slot * 0.47) * 3;
     this.x = this.homeX + formationOffset;
     this.y = this.homeY + bob;
-    if (Math.random() < this.type.diveChance * dt * 60) {
+    if (Math.random() < this.type.diveChance * this.difficulty.enemyDiveChance * dt * 60) {
       this.diving = true;
       this.diveOrigin = { x: this.x, y: this.y };
     }
@@ -144,7 +148,7 @@ export class Enemy {
 
   readyToFire() {
     if (this.fireTimer > 0) return false;
-    this.fireTimer = rand(0.8, 1.8) / this.type.fireRate;
+    this.fireTimer = rand(0.8, 1.8) / (this.type.fireRate * this.difficulty.enemyFireRate);
     return true;
   }
 
@@ -157,7 +161,7 @@ export class Enemy {
         x: this.x + this.w / 2 - 4,
         y: this.y + this.h - 2,
         vx: Math.sin(angle) * 110,
-        vy: this.type.shotSpeed,
+        vy: this.type.shotSpeed * this.difficulty.enemyShotSpeed,
         faction: 'enemy',
         style: this.typeKey,
         damage: 1,
@@ -181,11 +185,13 @@ export class Enemy {
 }
 
 export class Boss {
-  constructor({ name, hp, score }) {
+  constructor({ name, hp, score }, difficulty) {
     this.name = name;
-    this.maxHp = hp;
-    this.hp = hp;
+    this.maxHp = Math.max(1, Math.round(hp * difficulty.bossHp));
+    this.hp = this.maxHp;
     this.score = score;
+    this.fireRate = difficulty.bossFireRate;
+    this.shotCount = difficulty.bossShotCount;
     this.w = 236;
     this.h = 150;
     this.x = GAME_WIDTH / 2 - this.w / 2;
@@ -216,7 +222,7 @@ export class Boss {
     this.fireTimer -= dt;
     this.patternClock += dt;
     if (this.fireTimer <= 0) {
-      this.fireTimer = this.hp < this.maxHp * 0.48 ? 0.55 : 0.85;
+      this.fireTimer = (this.hp < this.maxHp * 0.48 ? 0.55 : 0.85) / this.fireRate;
       this.pattern = (this.pattern + 1) % 3;
       return this.attack();
     }
@@ -228,17 +234,21 @@ export class Boss {
     const originX = this.x + this.w / 2;
     const originY = this.y + this.h - 12;
     if (this.pattern === 0) {
-      for (let i = -4; i <= 4; i += 1) {
-        const angle = i * 0.14;
+      const count = Math.max(5, Math.round(9 * this.shotCount));
+      for (let i = 0; i < count; i += 1) {
+        const angle = (i / Math.max(1, count - 1) - 0.5) * 1.12;
         shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 210, vy: 220 + Math.cos(angle) * 48, faction: 'enemy', style: 'boss', damage: 1, w: 11, h: 18, life: 4.2 }));
       }
     } else if (this.pattern === 1) {
-      for (let i = -2; i <= 2; i += 1) {
-        shots.push(new Projectile({ x: originX + i * 34, y: originY, vx: i * 38, vy: 325, faction: 'enemy', style: 'boss', damage: 1, w: 12, h: 22, life: 3.2 }));
+      const count = Math.max(3, Math.round(5 * this.shotCount));
+      for (let i = 0; i < count; i += 1) {
+        const offset = i - (count - 1) / 2;
+        shots.push(new Projectile({ x: originX + offset * 34, y: originY, vx: offset * 38, vy: 325, faction: 'enemy', style: 'boss', damage: 1, w: 12, h: 22, life: 3.2 }));
       }
     } else {
-      for (let i = 0; i < 16; i += 1) {
-        const angle = (i / 16) * Math.PI * 2 + this.t;
+      const count = Math.max(10, Math.round(16 * this.shotCount));
+      for (let i = 0; i < count; i += 1) {
+        const angle = (i / count) * Math.PI * 2 + this.t;
         shots.push(new Projectile({ x: originX, y: originY - 12, vx: Math.cos(angle) * 165, vy: Math.sin(angle) * 165 + 135, faction: 'enemy', style: 'boss', damage: 1, w: 9, h: 14, life: 3.8 }));
       }
     }
@@ -257,12 +267,12 @@ export class Boss {
 }
 
 export class Barrier {
-  constructor(x) {
+  constructor(x, difficulty) {
     this.x = x;
     this.y = GAME_HEIGHT - 192;
     this.w = 106;
     this.h = 50;
-    this.maxHp = 24;
+    this.maxHp = Math.max(1, Math.round(24 * difficulty.barrierHp));
     this.hp = this.maxHp;
     this.dead = false;
   }

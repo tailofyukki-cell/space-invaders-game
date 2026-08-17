@@ -305,3 +305,124 @@ input[type="range"] { width: 100%; accent-color: var(--cyan); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+/* 難易度選択 */
+.difficulty-panel {
+  width: min(100%, 820px);
+  margin: 24px auto -3px;
+  padding: 13px;
+  border: 1px solid rgba(127, 247, 255, .2);
+  background: rgba(5, 8, 29, .55);
+  backdrop-filter: blur(8px);
+}
+
+.difficulty-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding: 0 3px;
+}
+.difficulty-heading p {
+  margin: 0;
+  color: var(--paper);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .11em;
+}
+.difficulty-heading span {
+  color: var(--gold);
+  font: 700 13px "Rajdhani", "Noto Sans JP", sans-serif;
+  letter-spacing: .08em;
+}
+.difficulty-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.difficulty-card {
+  position: relative;
+  display: flex;
+  min-height: 123px;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 13px 13px 11px;
+  border: 1px solid rgba(148, 170, 199, .34);
+  color: var(--muted);
+  text-align: left;
+  background: rgba(12, 18, 53, .56);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease, box-shadow .18s ease;
+}
+.difficulty-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(127, 247, 255, .8);
+  background: rgba(23, 43, 85, .7);
+}
+.difficulty-card.is-selected {
+  border-color: var(--cyan);
+  color: var(--paper);
+  background: linear-gradient(145deg, rgba(29, 102, 139, .45), rgba(16, 20, 61, .88));
+  box-shadow: inset 0 0 20px rgba(127, 247, 255, .12), 0 0 16px rgba(127, 247, 255, .14);
+}
+.difficulty-card[data-difficulty="hard"].is-selected {
+  border-color: var(--magenta);
+  background: linear-gradient(145deg, rgba(121, 31, 103, .46), rgba(33, 15, 56, .9));
+  box-shadow: inset 0 0 20px rgba(255, 74, 162, .12), 0 0 16px rgba(255, 74, 162, .16);
+}
+.difficulty-name {
+  display: block;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 700;
+}
+.difficulty-name small {
+  margin-left: 5px;
+  color: var(--cyan);
+  font: 700 11px "Rajdhani", sans-serif;
+  letter-spacing: .08em;
+}
+.difficulty-card[data-difficulty="hard"] .difficulty-name small { color: var(--magenta); }
+.difficulty-desc {
+  display: block;
+  margin-top: 7px;
+  color: inherit;
+  font-size: 11px;
+  line-height: 1.55;
+}
+.difficulty-score {
+  display: block;
+  margin-top: auto;
+  padding-top: 9px;
+  color: var(--gold);
+  font: 700 12px "Rajdhani", sans-serif;
+  letter-spacing: .08em;
+}
+.recommend-badge {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  padding: 3px 7px;
+  color: #071326;
+  background: var(--gold);
+  font-size: 10px;
+  font-weight: 700;
+}
+.result-difficulty {
+  margin: 0 0 -9px;
+  color: var(--gold);
+  font: 700 14px "Rajdhani", "Noto Sans JP", sans-serif;
+  letter-spacing: .08em;
+}
+
+@media (max-width: 720px) {
+  .difficulty-panel { margin-top: 19px; padding: 10px; }
+  .difficulty-options { grid-template-columns: 1fr; gap: 6px; }
+  .difficulty-card { min-height: 86px; padding: 10px 12px; }
+  .difficulty-desc { margin-top: 3px; }
+  .difficulty-score { margin-top: 4px; padding-top: 0; }
+}
+
+@media (max-width: 390px) {
+  .difficulty-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+}

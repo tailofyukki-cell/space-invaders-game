@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, STORAGE_KEYS, TEXT } from './src/config.js';
+import { DEFAULT_SETTINGS, DIFFICULTIES, STORAGE_KEYS, TEXT } from './src/config.js';
 import { GameWorld } from './src/game.js';
 
 const elements = {
@@ -27,6 +27,9 @@ const elements = {
   soundSlider: document.getElementById('sound-slider'),
   soundOutput: document.getElementById('sound-output'),
   shakeToggle: document.getElementById('shake-toggle'),
+  difficultyCurrent: document.getElementById('difficulty-current'),
+  resultDifficulty: document.getElementById('result-difficulty'),
+  difficultyCards: [...document.querySelectorAll('[data-difficulty]')],
 };
 
 let settings = loadSettings();
@@ -40,8 +43,9 @@ const game = new GameWorld(elements.canvas, {
   onFinish: showResult,
 });
 
-game.setHighScore(Number(localStorage.getItem(STORAGE_KEYS.highScore) || 0));
+game.setHighScore(getDifficultyHighScore());
 applySettingsToUi();
+renderDifficultySelection();
 showScreen('title');
 
 elements.start.addEventListener('click', startGame);
@@ -50,6 +54,9 @@ elements.returnTitle.addEventListener('click', returnToTitle);
 elements.settings.addEventListener('click', () => showScreen('settings'));
 elements.closeSettings.addEventListener('click', () => showScreen('title'));
 elements.pause.addEventListener('click', () => game.togglePause());
+elements.difficultyCards.forEach((card) => {
+  card.addEventListener('click', () => selectDifficulty(card.dataset.difficulty));
+});
 
 elements.soundSlider.addEventListener('input', () => {
   settings.sound = Number(elements.soundSlider.value) / 100;
@@ -76,7 +83,8 @@ function startGame() {
 
 function returnToTitle() {
   game.reset();
-  game.setHighScore(Number(localStorage.getItem(STORAGE_KEYS.highScore) || 0));
+  game.setHighScore(getDifficultyHighScore());
+  renderDifficultySelection();
   showScreen('title');
 }
 
@@ -113,6 +121,7 @@ function showResult(result) {
   elements.resultScore.textContent = String(result.score).padStart(7, '0');
   elements.resultHighScore.textContent = String(result.highScore).padStart(7, '0');
   elements.resultCombo.textContent = `${result.combo}`;
+  elements.resultDifficulty.textContent = `難易度: ${result.difficulty.shortLabel}　SCORE ×${result.difficulty.scoreMultiplier.toFixed(2)}`;
   elements.newRecord.classList.toggle('hidden', !result.isNewRecord);
   showScreen('result');
 }
@@ -150,7 +159,9 @@ function bindTouchControls() {
 function loadSettings() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.settings) || '{}');
-    return { ...DEFAULT_SETTINGS, ...saved };
+    const loaded = { ...DEFAULT_SETTINGS, ...saved };
+    if (!DIFFICULTIES[loaded.difficulty]) loaded.difficulty = DEFAULT_SETTINGS.difficulty;
+    return loaded;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }
@@ -167,9 +178,39 @@ function applySettingsToUi() {
   elements.shakeToggle.checked = settings.screenShake;
 }
 
+function currentDifficulty() {
+  return DIFFICULTIES[settings.difficulty] || DIFFICULTIES.easy;
+}
+
+function getDifficultyHighScore() {
+  return Number(localStorage.getItem(`${STORAGE_KEYS.highScore}-${currentDifficulty().key}`) || 0);
+}
+
+function selectDifficulty(key) {
+  if (!DIFFICULTIES[key]) return;
+  settings.difficulty = key;
+  saveSettings();
+  game.setHighScore(getDifficultyHighScore());
+  renderDifficultySelection();
+}
+
+function renderDifficultySelection() {
+  const difficulty = currentDifficulty();
+  elements.difficultyCards.forEach((card) => {
+    const selected = card.dataset.difficulty === difficulty.key;
+    card.classList.toggle('is-selected', selected);
+    card.setAttribute('aria-checked', String(selected));
+  });
+  elements.difficultyCurrent.textContent = difficulty.key === 'easy'
+    ? `${difficulty.label} — 推奨`
+    : `${difficulty.label} — SCORE ×${difficulty.scoreMultiplier.toFixed(2)}`;
+}
+
 function setupDemoMode() {
   const params = new URLSearchParams(window.location.search);
   if (!params.has('demo')) return;
+  const requestedDifficulty = params.get('difficulty');
+  if (requestedDifficulty && DIFFICULTIES[requestedDifficulty]) selectDifficulty(requestedDifficulty);
   if (params.has('debug')) window.__kagekiriDebug = game;
   window.setTimeout(startGame, 180);
   const tick = (time) => {

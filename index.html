@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260817a">
+  <link rel="stylesheet" href="styles.css?v=20260817b">
 </head>
 <body>
   <main id="app" aria-live="polite">
@@ -26,6 +26,30 @@
       <h1>月影防衛線</h1>
       <p class="subtitle">KAGEKIRI PROTOCOL</p>
       <p class="story">月都の結界を侵食する妖怪型ドローン《穢機》。結界機《カグラ》を操り、紅月ノヲロチを祓え。</p>
+      <section class="difficulty-panel" aria-labelledby="difficulty-title">
+        <div class="difficulty-heading">
+          <p id="difficulty-title">難易度を選択</p>
+          <span id="difficulty-current" aria-live="polite">見習い — 推奨</span>
+        </div>
+        <div class="difficulty-options" role="radiogroup" aria-label="難易度">
+          <button class="difficulty-card is-selected" type="button" data-difficulty="easy" role="radio" aria-checked="true">
+            <span class="difficulty-name">見習い <small>EASY</small></span>
+            <span class="difficulty-desc">HPが多く、敵弾はゆるやか。結界解放をすぐ使える。</span>
+            <span class="difficulty-score">SCORE ×0.75</span>
+            <span class="recommend-badge">推奨</span>
+          </button>
+          <button class="difficulty-card" type="button" data-difficulty="normal" role="radio" aria-checked="false">
+            <span class="difficulty-name">守護者 <small>NORMAL</small></span>
+            <span class="difficulty-desc">敵弾を見極め、コンボを狙う標準的な結界任務。</span>
+            <span class="difficulty-score">SCORE ×1.00</span>
+          </button>
+          <button class="difficulty-card" type="button" data-difficulty="hard" role="radio" aria-checked="false">
+            <span class="difficulty-name">修羅 <small>HARD</small></span>
+            <span class="difficulty-desc">高速弾幕と強化された穢機に挑む、熟練者向け任務。</span>
+            <span class="difficulty-score">SCORE ×1.35</span>
+          </button>
+        </div>
+      </section>
       <div class="title-actions">
         <button id="start-btn" class="primary-button">結界を展開する <span>PLAY</span></button>
         <button id="settings-btn" class="secondary-button">設定 <span>SETTINGS</span></button>
@@ -66,6 +90,7 @@
         <p id="result-kicker" class="eyebrow">MISSION REPORT</p>
         <h2 id="result-title">結界崩壊</h2>
         <p id="result-copy" class="result-copy"></p>
+        <p id="result-difficulty" class="result-difficulty">難易度: 見習い / EASY</p>
         <dl class="result-stats">
           <div><dt>SCORE</dt><dd id="result-score">0000000</dd></div>
           <div><dt>HIGH SCORE</dt><dd id="result-high-score">0000000</dd></div>
@@ -94,6 +119,6 @@
       </div>
     </section>
   </main>
-  <script type="module" src="main.js?v=20260817a"></script>
+  <script type="module" src="main.js?v=20260817b"></script>
 </body>
 </html>
