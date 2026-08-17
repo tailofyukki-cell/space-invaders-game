@@ -1,0 +1,298 @@
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, clamp, rand } from './config.js';
+
+export class Projectile {
+  constructor({ x, y, vx = 0, vy, w = 8, h = 18, faction, damage = 1, style = 'shot', life = 3 }) {
+    this.x = x;
+    this.y = y;
+    this.vx = vx;
+    this.vy = vy;
+    this.w = w;
+    this.h = h;
+    this.faction = faction;
+    this.damage = damage;
+    this.style = style;
+    this.life = life;
+    this.dead = false;
+    this.trail = [];
+  }
+
+  update(dt) {
+    this.life -= dt;
+    this.trail.push({ x: this.x + this.w / 2, y: this.y + this.h / 2, life: 0.18 });
+    if (this.trail.length > 8) this.trail.shift();
+    this.trail.forEach((point) => { point.life -= dt; });
+    this.trail = this.trail.filter((point) => point.life > 0);
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    if (this.life <= 0 || this.y < -60 || this.y > GAME_HEIGHT + 60 || this.x < -60 || this.x > GAME_WIDTH + 60) {
+      this.dead = true;
+    }
+  }
+}
+
+export class Player {
+  constructor() {
+    this.w = 46;
+    this.h = 54;
+    this.x = GAME_WIDTH / 2 - this.w / 2;
+    this.y = GAME_HEIGHT - 88;
+    this.speed = 390;
+    this.maxHp = 5;
+    this.hp = this.maxHp;
+    this.fireCooldown = 0;
+    this.fireInterval = 0.17;
+    this.invincible = 0;
+    this.energy = 0;
+    this.maxEnergy = 100;
+    this.skillCooldown = 0;
+    this.dead = false;
+    this.enginePulse = 0;
+  }
+
+  update(dt, input) {
+    let horizontal = 0;
+    if (input.moveLeft) horizontal -= 1;
+    if (input.moveRight) horizontal += 1;
+    this.x = clamp(this.x + horizontal * this.speed * dt, 18, GAME_WIDTH - this.w - 18);
+    this.fireCooldown -= dt;
+    this.invincible = Math.max(0, this.invincible - dt);
+    this.skillCooldown = Math.max(0, this.skillCooldown - dt);
+    this.enginePulse += dt * 8;
+  }
+
+  canFire() {
+    return this.fireCooldown <= 0;
+  }
+
+  fire() {
+    this.fireCooldown = this.fireInterval;
+    return [
+      new Projectile({ x: this.x + 10, y: this.y - 4, vx: -60, vy: -620, faction: 'player', style: 'ofuda', damage: 1.2 }),
+      new Projectile({ x: this.x + this.w - 18, y: this.y - 4, vx: 60, vy: -620, faction: 'player', style: 'ofuda', damage: 1.2 }),
+    ];
+  }
+
+  canSkill() {
+    return this.energy >= this.maxEnergy && this.skillCooldown <= 0;
+  }
+
+  useSkill() {
+    this.energy = 0;
+    this.skillCooldown = 1.1;
+    return { x: this.x + this.w / 2, y: this.y + this.h / 2, radius: 25, maxRadius: 430, time: 0, duration: 0.7 };
+  }
+
+  takeDamage(amount) {
+    if (this.invincible > 0 || this.dead) return false;
+    this.hp = Math.max(0, this.hp - amount);
+    this.invincible = 1.1;
+    if (this.hp <= 0) this.dead = true;
+    return true;
+  }
+}
+
+export class Enemy {
+  constructor(typeKey, x, y, slot, formationWidth) {
+    this.typeKey = typeKey;
+    this.type = ENEMY_TYPES[typeKey];
+    this.x = x;
+    this.y = y;
+    this.homeX = x;
+    this.homeY = y;
+    this.slot = slot;
+    this.formationWidth = formationWidth;
+    this.w = 42;
+    this.h = 36;
+    this.hp = this.type.hp;
+    this.maxHp = this.type.hp;
+    this.dead = false;
+    this.t = rand(0, 6.28);
+    this.fireTimer = rand(0.3, 1.5) / this.type.fireRate;
+    this.diving = false;
+    this.diveTime = 0;
+    this.diveOrigin = { x, y };
+    this.value = this.type.score;
+    this.flash = 0;
+  }
+
+  update(dt, formation) {
+    this.t += dt;
+    this.flash = Math.max(0, this.flash - dt);
+    this.fireTimer -= dt;
+    if (this.diving) {
+      this.diveTime += dt;
+      const progress = this.diveTime / 2.15;
+      this.x = this.diveOrigin.x + Math.sin(progress * Math.PI * 2.1) * 135;
+      this.y = this.diveOrigin.y + progress * 440;
+      if (progress >= 1.06 || this.y > GAME_HEIGHT + 60) {
+        this.diving = false;
+        this.diveTime = 0;
+        this.x = this.homeX;
+        this.y = this.homeY;
+      }
+      return;
+    }
+    const formationOffset = formation.offsetX;
+    const bob = Math.sin(this.t * 2.4 + this.slot * 0.47) * 3;
+    this.x = this.homeX + formationOffset;
+    this.y = this.homeY + bob;
+    if (Math.random() < this.type.diveChance * dt * 60) {
+      this.diving = true;
+      this.diveOrigin = { x: this.x, y: this.y };
+    }
+  }
+
+  readyToFire() {
+    if (this.fireTimer > 0) return false;
+    this.fireTimer = rand(0.8, 1.8) / this.type.fireRate;
+    return true;
+  }
+
+  fire() {
+    const spread = this.typeKey === 'chochin' ? 2 : 1;
+    const shots = [];
+    for (let i = 0; i < spread; i += 1) {
+      const angle = (i - (spread - 1) / 2) * 0.18;
+      shots.push(new Projectile({
+        x: this.x + this.w / 2 - 4,
+        y: this.y + this.h - 2,
+        vx: Math.sin(angle) * 110,
+        vy: this.type.shotSpeed,
+        faction: 'enemy',
+        style: this.typeKey,
+        damage: 1,
+        w: 8,
+        h: 14,
+        life: 4,
+      }));
+    }
+    return shots;
+  }
+
+  hit(damage) {
+    this.hp -= damage;
+    this.flash = 0.14;
+    if (this.hp <= 0) {
+      this.dead = true;
+      return true;
+    }
+    return false;
+  }
+}
+
+export class Boss {
+  constructor({ name, hp, score }) {
+    this.name = name;
+    this.maxHp = hp;
+    this.hp = hp;
+    this.score = score;
+    this.w = 236;
+    this.h = 150;
+    this.x = GAME_WIDTH / 2 - this.w / 2;
+    this.y = -this.h;
+    this.targetY = 50;
+    this.t = 0;
+    this.phase = 'enter';
+    this.fireTimer = 1.2;
+    this.pattern = 0;
+    this.patternClock = 0;
+    this.dead = false;
+    this.flash = 0;
+  }
+
+  update(dt) {
+    this.t += dt;
+    this.flash = Math.max(0, this.flash - dt);
+    if (this.phase === 'enter') {
+      this.y += 75 * dt;
+      if (this.y >= this.targetY) {
+        this.y = this.targetY;
+        this.phase = 'fight';
+      }
+      return [];
+    }
+    this.x = GAME_WIDTH / 2 - this.w / 2 + Math.sin(this.t * 0.68) * 205;
+    this.y = this.targetY + Math.sin(this.t * 1.9) * 7;
+    this.fireTimer -= dt;
+    this.patternClock += dt;
+    if (this.fireTimer <= 0) {
+      this.fireTimer = this.hp < this.maxHp * 0.48 ? 0.55 : 0.85;
+      this.pattern = (this.pattern + 1) % 3;
+      return this.attack();
+    }
+    return [];
+  }
+
+  attack() {
+    const shots = [];
+    const originX = this.x + this.w / 2;
+    const originY = this.y + this.h - 12;
+    if (this.pattern === 0) {
+      for (let i = -4; i <= 4; i += 1) {
+        const angle = i * 0.14;
+        shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 210, vy: 220 + Math.cos(angle) * 48, faction: 'enemy', style: 'boss', damage: 1, w: 11, h: 18, life: 4.2 }));
+      }
+    } else if (this.pattern === 1) {
+      for (let i = -2; i <= 2; i += 1) {
+        shots.push(new Projectile({ x: originX + i * 34, y: originY, vx: i * 38, vy: 325, faction: 'enemy', style: 'boss', damage: 1, w: 12, h: 22, life: 3.2 }));
+      }
+    } else {
+      for (let i = 0; i < 16; i += 1) {
+        const angle = (i / 16) * Math.PI * 2 + this.t;
+        shots.push(new Projectile({ x: originX, y: originY - 12, vx: Math.cos(angle) * 165, vy: Math.sin(angle) * 165 + 135, faction: 'enemy', style: 'boss', damage: 1, w: 9, h: 14, life: 3.8 }));
+      }
+    }
+    return shots;
+  }
+
+  hit(damage) {
+    this.hp -= damage;
+    this.flash = 0.12;
+    if (this.hp <= 0) {
+      this.dead = true;
+      return true;
+    }
+    return false;
+  }
+}
+
+export class Barrier {
+  constructor(x) {
+    this.x = x;
+    this.y = GAME_HEIGHT - 192;
+    this.w = 106;
+    this.h = 50;
+    this.maxHp = 24;
+    this.hp = this.maxHp;
+    this.dead = false;
+  }
+
+  hit(damage = 1) {
+    this.hp = Math.max(0, this.hp - damage);
+    if (this.hp <= 0) this.dead = true;
+  }
+}
+
+export class Particle {
+  constructor(x, y, color, options = {}) {
+    this.x = x;
+    this.y = y;
+    this.vx = options.vx ?? rand(-95, 95);
+    this.vy = options.vy ?? rand(-95, 95);
+    this.life = options.life ?? rand(0.28, 0.62);
+    this.maxLife = this.life;
+    this.size = options.size ?? rand(2, 5);
+    this.color = color;
+    this.drag = options.drag ?? 0.91;
+    this.dead = false;
+  }
+
+  update(dt) {
+    this.life -= dt;
+    this.x += this.vx * dt;
+    this.y += this.vy * dt;
+    this.vx *= this.drag;
+    this.vy *= this.drag;
+    if (this.life <= 0) this.dead = true;
+  }
+}

@@ -1,39 +1,99 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Space Invaders - インベーダーゲーム</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07091e">
+  <meta name="description" content="ネオン和風サイバーSFのブラウザ向けアーケードシューティング、月影防衛線 — KAGEKIRI PROTOCOL">
+  <title>月影防衛線 — KAGEKIRI PROTOCOL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div id="game-container">
-        <div id="title-screen" class="screen">
-            <h1>👾 SPACE INVADERS 👾</h1>
-            <div class="instructions">
-                <h2>操作方法</h2>
-                <p><strong>PC:</strong> ← → キーで移動、Spaceキーで発射</p>
-                <p><strong>スマホ:</strong> 画面左右タップで移動、中央タップで発射</p>
-            </div>
-            <button id="start-btn" class="game-btn">START GAME</button>
-        </div>
-
-        <div id="game-screen" class="screen hidden">
-            <div id="game-info">
-                <div id="score">SCORE: 0</div>
-                <div id="lives">LIVES: ❤️❤️❤️</div>
-            </div>
-            <canvas id="game-canvas"></canvas>
-        </div>
-
-        <div id="result-screen" class="screen hidden">
-            <h1 id="result-title">GAME OVER</h1>
-            <p id="final-score">SCORE: 0</p>
-            <button id="retry-btn" class="game-btn">RETRY</button>
-            <button id="title-btn" class="game-btn">TITLE</button>
-        </div>
+  <main id="app" aria-live="polite">
+    <div class="screen-background" aria-hidden="true">
+      <div class="moon"></div>
+      <div class="grid"></div>
+      <div class="rain rain-a"></div>
+      <div class="rain rain-b"></div>
     </div>
 
-    <script src="main.js"></script>
+    <section id="title-screen" class="screen title-screen">
+      <div class="title-kamon" aria-hidden="true">結</div>
+      <p class="eyebrow">NEON WAFU CYBER DEFENSE</p>
+      <h1>月影防衛線</h1>
+      <p class="subtitle">KAGEKIRI PROTOCOL</p>
+      <p class="story">月都の結界を侵食する妖怪型ドローン《穢機》。結界機《カグラ》を操り、紅月ノヲロチを祓え。</p>
+      <div class="title-actions">
+        <button id="start-btn" class="primary-button">結界を展開する <span>PLAY</span></button>
+        <button id="settings-btn" class="secondary-button">設定 <span>SETTINGS</span></button>
+      </div>
+      <div class="control-guide" aria-label="操作方法">
+        <div><strong>PC</strong><span>← → / A D：移動</span><span>Space / Z：射撃</span><span>Shift / X：結界解放</span></div>
+        <div><strong>スマホ</strong><span>画面下の仮想ボタン：移動・射撃・スキル</span><span>縦画面・横画面に対応</span></div>
+      </div>
+      <p class="platform-note">Windows / macOS / Linux / Android / iOS の現行ブラウザに対応</p>
+    </section>
+
+    <section id="game-screen" class="screen game-screen hidden" aria-label="ゲーム画面">
+      <div class="top-hud" aria-hidden="true">
+        <div class="hud-block"><span class="hud-label">SCORE</span><strong id="score-value">0000000</strong></div>
+        <div class="hud-block hud-center"><span class="hud-label">WAVE</span><strong id="wave-value">01</strong></div>
+        <div class="hud-block hud-right"><span class="hud-label">HP</span><span id="hp-value" class="hp-pips"></span></div>
+      </div>
+      <div class="game-frame">
+        <canvas id="game-canvas" width="960" height="540" aria-label="月影防衛線のゲームキャンバス"></canvas>
+        <button id="pause-btn" class="pause-button" aria-label="一時停止">Ⅱ</button>
+      </div>
+      <div id="message-toast" class="message-toast" role="status"></div>
+      <div id="touch-controls" class="touch-controls" aria-label="スマホ用操作ボタン">
+        <div class="move-controls">
+          <button class="touch-button move-button" data-action="moveLeft" aria-label="左へ移動">◀</button>
+          <button class="touch-button move-button" data-action="moveRight" aria-label="右へ移動">▶</button>
+        </div>
+        <div class="action-controls">
+          <button class="touch-button skill-button" data-action="skill" aria-label="結界解放">結</button>
+          <button class="touch-button fire-button" data-action="fire" aria-label="射撃">射</button>
+        </div>
+      </div>
+      <p class="desktop-hint">← → / A D：移動　Space / Z：射撃　Shift / X：結界解放　Esc / P：一時停止</p>
+    </section>
+
+    <section id="result-screen" class="screen result-screen hidden">
+      <div class="result-card">
+        <p id="result-kicker" class="eyebrow">MISSION REPORT</p>
+        <h2 id="result-title">結界崩壊</h2>
+        <p id="result-copy" class="result-copy"></p>
+        <dl class="result-stats">
+          <div><dt>SCORE</dt><dd id="result-score">0000000</dd></div>
+          <div><dt>HIGH SCORE</dt><dd id="result-high-score">0000000</dd></div>
+          <div><dt>MAX COMBO</dt><dd id="result-combo">0</dd></div>
+        </dl>
+        <p id="new-record" class="new-record hidden">NEW RECORD</p>
+        <div class="title-actions">
+          <button id="retry-btn" class="primary-button">再結界 <span>RETRY</span></button>
+          <button id="return-title-btn" class="secondary-button">タイトルへ <span>TITLE</span></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="settings-screen" class="screen modal-screen hidden" aria-labelledby="settings-title">
+      <div class="settings-card">
+        <p class="eyebrow">SYSTEM PANEL</p>
+        <h2 id="settings-title">結界設定</h2>
+        <label class="setting-row" for="sound-slider"><span>効果音</span><output id="sound-output">55%</output></label>
+        <input id="sound-slider" type="range" min="0" max="100" value="55" aria-label="効果音の音量">
+        <label class="setting-row toggle-row"><span>画面揺れ</span><input id="shake-toggle" type="checkbox" checked></label>
+        <div class="support-note">
+          <p>音は「結界を展開する」またはゲーム中の最初の操作後に有効になります。</p>
+          <p>モバイルでは仮想ボタンを長押しして移動・連射できます。</p>
+        </div>
+        <button id="close-settings-btn" class="primary-button">設定を閉じる <span>CLOSE</span></button>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
