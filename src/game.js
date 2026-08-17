@@ -1,6 +1,18 @@
 import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
 import { Barrier, Boss, Enemy, Particle, Player } from './entities.js';
 
+const SPRITE_SOURCES = Object.freeze({
+  kagura: 'assets/sprites/kagura.png',
+  oni: 'assets/sprites/oni.png',
+  kitsune: 'assets/sprites/kitsune.png',
+  chochin: 'assets/sprites/chochin.png',
+  hebi: 'assets/sprites/hebi.png',
+  tengu: 'assets/sprites/tengu.png',
+  orochi: 'assets/sprites/orochi.png',
+  kappa: 'assets/sprites/kappa.png',
+  yatagarasu: 'assets/sprites/yatagarasu.png',
+});
+
 export class InputManager {
   constructor() {
     this.actions = {
@@ -561,6 +573,37 @@ class CanvasRenderer {
       s: 0.4 + (index % 3) * 0.35,
       a: 0.25 + (index % 5) * 0.1,
     }));
+    this.sprites = this.loadSprites();
+  }
+
+  loadSprites() {
+    const sprites = {};
+    Object.entries(SPRITE_SOURCES).forEach(([key, source]) => {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = source;
+      sprites[key] = image;
+    });
+    return sprites;
+  }
+
+  drawSprite(key, centerX, centerY, size, options = {}) {
+    const image = this.sprites[key];
+    if (!image || !image.complete || image.naturalWidth === 0) return false;
+    const { ctx } = this;
+    const alpha = options.alpha ?? 1;
+    const glow = options.glow ?? null;
+    const glowBlur = options.glowBlur ?? 0;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    if (glow) {
+      ctx.shadowColor = glow;
+      ctx.shadowBlur = glowBlur;
+    }
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(image, centerX - size / 2, centerY - size / 2, size, size);
+    ctx.restore();
+    return true;
   }
 
   render(world) {
@@ -826,6 +869,8 @@ class CanvasRenderer {
     const { ctx } = this;
     const cx = player.x + player.w / 2;
     const cy = player.y + player.h / 2;
+    const alpha = player.invincible > 0 && Math.floor(player.invincible * 16) % 2 === 0 ? 0.42 : 1;
+    if (this.drawSprite('kagura', cx, cy + 3, 78, { alpha, glow: COLORS.cyan, glowBlur: 12 })) return;
     ctx.save();
     ctx.translate(cx, cy);
     if (player.invincible > 0 && Math.floor(player.invincible * 16) % 2 === 0) ctx.globalAlpha = 0.4;
@@ -870,6 +915,9 @@ class CanvasRenderer {
   drawEnemy(enemy) {
     const { ctx } = this;
     const { x, y, w, h, typeKey, type } = enemy;
+    const size = typeKey === 'hebi' || typeKey === 'tengu' ? 58 : 54;
+    const alpha = enemy.flash > 0 ? 0.78 : 1;
+    if (this.drawSprite(typeKey, x + w / 2, y + h / 2, size, { alpha, glow: type.accent, glowBlur: 8 })) return;
     ctx.save();
     ctx.translate(x + w / 2, y + h / 2);
     ctx.shadowColor = type.accent;
@@ -921,6 +969,9 @@ class CanvasRenderer {
   }
 
   drawBoss(boss) {
+    const spriteSize = boss.kind === 'yatagarasu' ? 330 : 310;
+    const alpha = boss.flash > 0 ? 0.8 : 1;
+    if (this.drawSprite(boss.kind, boss.x + boss.w / 2, boss.y + boss.h / 2 + 10, spriteSize, { alpha, glow: boss.accent, glowBlur: 16 })) return;
     if (boss.kind === 'kappa') {
       this.drawKappaBoss(boss);
       return;
