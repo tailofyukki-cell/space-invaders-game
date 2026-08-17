@@ -95,10 +95,11 @@ export class Player {
 }
 
 export class Enemy {
-  constructor(typeKey, x, y, slot, formationWidth, difficulty) {
+  constructor(typeKey, x, y, slot, formationWidth, difficulty, stageTuning = {}) {
     this.typeKey = typeKey;
     this.type = ENEMY_TYPES[typeKey];
     this.difficulty = difficulty;
+    this.stageTuning = { hp: 1, fireRate: 1, shotSpeed: 1, diveChance: 1, ...stageTuning };
     this.x = x;
     this.y = y;
     this.homeX = x;
@@ -107,11 +108,11 @@ export class Enemy {
     this.formationWidth = formationWidth;
     this.w = 42;
     this.h = 36;
-    this.hp = Math.max(1, Math.round(this.type.hp * difficulty.enemyHp));
+    this.hp = Math.max(1, Math.round(this.type.hp * difficulty.enemyHp * this.stageTuning.hp));
     this.maxHp = this.hp;
     this.dead = false;
     this.t = rand(0, 6.28);
-    this.fireTimer = rand(0.3, 1.5) / (this.type.fireRate * difficulty.enemyFireRate);
+    this.fireTimer = rand(0.3, 1.5) / (this.type.fireRate * difficulty.enemyFireRate * this.stageTuning.fireRate);
     this.diving = false;
     this.diveTime = 0;
     this.diveOrigin = { x, y };
@@ -140,7 +141,7 @@ export class Enemy {
     const bob = Math.sin(this.t * 2.4 + this.slot * 0.47) * 3;
     this.x = this.homeX + formationOffset;
     this.y = this.homeY + bob;
-    if (Math.random() < this.type.diveChance * this.difficulty.enemyDiveChance * dt * 60) {
+    if (Math.random() < this.type.diveChance * this.difficulty.enemyDiveChance * this.stageTuning.diveChance * dt * 60) {
       this.diving = true;
       this.diveOrigin = { x: this.x, y: this.y };
     }
@@ -148,7 +149,7 @@ export class Enemy {
 
   readyToFire() {
     if (this.fireTimer > 0) return false;
-    this.fireTimer = rand(0.8, 1.8) / (this.type.fireRate * this.difficulty.enemyFireRate);
+    this.fireTimer = rand(0.8, 1.8) / (this.type.fireRate * this.difficulty.enemyFireRate * this.stageTuning.fireRate);
     return true;
   }
 
@@ -161,7 +162,7 @@ export class Enemy {
         x: this.x + this.w / 2 - 4,
         y: this.y + this.h - 2,
         vx: Math.sin(angle) * 110,
-        vy: this.type.shotSpeed * this.difficulty.enemyShotSpeed,
+        vy: this.type.shotSpeed * this.difficulty.enemyShotSpeed * this.stageTuning.shotSpeed,
         faction: 'enemy',
         style: this.typeKey,
         damage: 1,
@@ -185,15 +186,18 @@ export class Enemy {
 }
 
 export class Boss {
-  constructor({ name, hp, score }, difficulty) {
+  constructor({ name, hp, score, kind = 'orochi', color = '#36113a', accent = '#ff4aa2' }, difficulty) {
     this.name = name;
+    this.kind = kind;
+    this.color = color;
+    this.accent = accent;
     this.maxHp = Math.max(1, Math.round(hp * difficulty.bossHp));
     this.hp = this.maxHp;
     this.score = score;
     this.fireRate = difficulty.bossFireRate;
     this.shotCount = difficulty.bossShotCount;
-    this.w = 236;
-    this.h = 150;
+    this.w = kind === 'yatagarasu' ? 258 : 236;
+    this.h = kind === 'yatagarasu' ? 164 : 150;
     this.x = GAME_WIDTH / 2 - this.w / 2;
     this.y = -this.h;
     this.targetY = 50;
@@ -217,8 +221,13 @@ export class Boss {
       }
       return [];
     }
-    this.x = GAME_WIDTH / 2 - this.w / 2 + Math.sin(this.t * 0.68) * 205;
-    this.y = this.targetY + Math.sin(this.t * 1.9) * 7;
+    const motion = this.kind === 'kappa'
+      ? { sway: 148, xSpeed: 0.88, yAmp: 11, ySpeed: 2.7 }
+      : this.kind === 'yatagarasu'
+        ? { sway: 238, xSpeed: 0.92, yAmp: 12, ySpeed: 2.15 }
+        : { sway: 205, xSpeed: 0.68, yAmp: 7, ySpeed: 1.9 };
+    this.x = GAME_WIDTH / 2 - this.w / 2 + Math.sin(this.t * motion.xSpeed) * motion.sway;
+    this.y = this.targetY + Math.sin(this.t * motion.ySpeed) * motion.yAmp;
     this.fireTimer -= dt;
     this.patternClock += dt;
     if (this.fireTimer <= 0) {
@@ -233,23 +242,67 @@ export class Boss {
     const shots = [];
     const originX = this.x + this.w / 2;
     const originY = this.y + this.h - 12;
+    if (this.kind === 'kappa') {
+      if (this.pattern === 0) {
+        const count = Math.max(5, Math.round(8 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const angle = (i / Math.max(1, count - 1) - 0.5) * 0.92;
+          shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 175, vy: 205 + Math.cos(angle) * 62, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 11, h: 17, life: 4.4 }));
+        }
+      } else if (this.pattern === 1) {
+        const count = Math.max(7, Math.round(11 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const angle = (i / count) * Math.PI * 1.36 + this.t * 1.7;
+          shots.push(new Projectile({ x: originX, y: originY, vx: Math.cos(angle) * 185, vy: 155 + Math.sin(angle) * 155, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 10, h: 16, life: 4.2 }));
+        }
+      } else {
+        const count = Math.max(3, Math.round(6 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const offset = i - (count - 1) / 2;
+          shots.push(new Projectile({ x: originX + offset * 46, y: originY, vx: offset * 16, vy: 310, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 13, h: 23, life: 3.5 }));
+        }
+      }
+      return shots;
+    }
+    if (this.kind === 'yatagarasu') {
+      if (this.pattern === 0) {
+        const count = Math.max(5, Math.round(7 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const angle = (i / Math.max(1, count - 1) - 0.5) * 1.28;
+          shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 268, vy: 205 + Math.cos(angle) * 76, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 12, h: 19, life: 4.1 }));
+        }
+      } else if (this.pattern === 1) {
+        const count = Math.max(12, Math.round(18 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const angle = (i / count) * Math.PI * 2 + this.t * 1.35;
+          shots.push(new Projectile({ x: originX, y: originY - 14, vx: Math.cos(angle) * 198, vy: Math.sin(angle) * 182 + 170, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 10, h: 15, life: 4 }));
+        }
+      } else {
+        const count = Math.max(5, Math.round(8 * this.shotCount));
+        for (let i = 0; i < count; i += 1) {
+          const offset = i - (count - 1) / 2;
+          shots.push(new Projectile({ x: originX + offset * 30, y: originY - 4, vx: offset * 54, vy: 360 - Math.abs(offset) * 28, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 12, h: 20, life: 3.3 }));
+        }
+      }
+      return shots;
+    }
     if (this.pattern === 0) {
       const count = Math.max(5, Math.round(9 * this.shotCount));
       for (let i = 0; i < count; i += 1) {
         const angle = (i / Math.max(1, count - 1) - 0.5) * 1.12;
-        shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 210, vy: 220 + Math.cos(angle) * 48, faction: 'enemy', style: 'boss', damage: 1, w: 11, h: 18, life: 4.2 }));
+        shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 210, vy: 220 + Math.cos(angle) * 48, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 11, h: 18, life: 4.2 }));
       }
     } else if (this.pattern === 1) {
       const count = Math.max(3, Math.round(5 * this.shotCount));
       for (let i = 0; i < count; i += 1) {
         const offset = i - (count - 1) / 2;
-        shots.push(new Projectile({ x: originX + offset * 34, y: originY, vx: offset * 38, vy: 325, faction: 'enemy', style: 'boss', damage: 1, w: 12, h: 22, life: 3.2 }));
+        shots.push(new Projectile({ x: originX + offset * 34, y: originY, vx: offset * 38, vy: 325, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 12, h: 22, life: 3.2 }));
       }
     } else {
       const count = Math.max(10, Math.round(16 * this.shotCount));
       for (let i = 0; i < count; i += 1) {
         const angle = (i / count) * Math.PI * 2 + this.t;
-        shots.push(new Projectile({ x: originX, y: originY - 12, vx: Math.cos(angle) * 165, vy: Math.sin(angle) * 165 + 135, faction: 'enemy', style: 'boss', damage: 1, w: 9, h: 14, life: 3.8 }));
+        shots.push(new Projectile({ x: originX, y: originY - 12, vx: Math.cos(angle) * 165, vy: Math.sin(angle) * 165 + 135, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 9, h: 14, life: 3.8 }));
       }
     }
     return shots;

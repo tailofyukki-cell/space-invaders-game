@@ -133,7 +133,8 @@ export class GameWorld {
 
   reset() {
     this.state = 'title';
-    this.stage = STAGES[0];
+    this.stageIndex = 0;
+    this.stage = STAGES[this.stageIndex];
     this.waveIndex = 0;
     this.waveDelay = 0;
     this.difficulty = getDifficulty(this.getSettings().difficulty);
@@ -154,6 +155,7 @@ export class GameWorld {
     this.flash = 0;
     this.banner = null;
     this.bossWarning = 0;
+    this.stageTransition = 0;
   }
 
   resize() {
@@ -174,8 +176,8 @@ export class GameWorld {
     this.state = 'intro';
     this.highScore = Number(localStorage.getItem(this.highScoreKey()) || 0);
     this.createBarriers();
-    this.banner = { title: `${this.stage.name} — ${this.difficulty.label}`, text: this.stage.intro, time: 2.4, maxTime: 2.4 };
-    this.onMessage?.(`${this.difficulty.label}任務を開始します。結界を維持してください。`, 'info');
+    this.banner = { title: `${this.stage.chapter} — ${this.stage.name}`, text: this.stage.intro, time: 2.7, maxTime: 2.7 };
+    this.onMessage?.(`${this.difficulty.label}任務を開始します。第一結界を維持してください。`, 'info');
     this.onStateChange?.('playing');
     this.ensureLoop();
   }
@@ -229,6 +231,13 @@ export class GameWorld {
       return;
     }
 
+    if (this.state === 'stageClear') {
+      this.stageTransition -= dt;
+      if (this.stageTransition <= 0) this.beginNextStage();
+      this.updateHud();
+      return;
+    }
+
     this.player.update(dt, this.input.actions);
     if (this.input.actions.fire && this.player.canFire()) this.playerFire();
     if (this.input.actions.skill && this.player.canSkill()) this.activateSkill();
@@ -252,7 +261,7 @@ export class GameWorld {
     if (active.length === 0) return;
     const left = Math.min(...active.map((enemy) => enemy.x));
     const right = Math.max(...active.map((enemy) => enemy.x + enemy.w));
-    const speed = (this.formation.speed + (this.waveIndex * 7) + Math.min(55, (48 - active.length) * 1.1)) * this.difficulty.formationSpeed;
+    const speed = (this.formation.speed + (this.waveIndex * 7) + Math.min(55, (48 - active.length) * 1.1)) * this.difficulty.formationSpeed * this.stage.tuning.formation;
     if (right >= GAME_WIDTH - 48 && this.formation.direction > 0) {
       this.formation.direction = -1;
       this.formation.drop += 13;
@@ -406,7 +415,10 @@ export class GameWorld {
       this.waveDelay -= dt;
       if (this.waveDelay <= 0) this.beginWave();
     }
-    if (this.state === 'boss' && this.boss?.dead) this.finish('clear');
+    if (this.state === 'boss' && this.boss?.dead) {
+      if (this.stageIndex < STAGES.length - 1) this.completeStage();
+      else this.finish('clear');
+    }
   }
 
   beginWave() {
@@ -414,7 +426,7 @@ export class GameWorld {
     if (!spec) {
       this.state = 'bossWarning';
       this.bossWarning = 2.1;
-      this.banner = { title: 'WARNING', text: '大型穢機《紅月ノヲロチ》接近。結界を最大出力へ。', time: 2.1, maxTime: 2.1 };
+      this.banner = { title: 'WARNING', text: `大型穢機《${this.stage.boss.name}》接近。結界を最大出力へ。`, time: 2.1, maxTime: 2.1 };
       this.audio.boss();
       return;
     }
@@ -428,7 +440,7 @@ export class GameWorld {
     let slot = 0;
     for (let row = 0; row < spec.rows; row += 1) {
       for (let col = 0; col < spec.cols; col += 1) {
-        this.enemies.push(new Enemy(spec.type, startX + col * spec.gapX, startY + row * spec.gapY, slot, formationWidth, this.difficulty));
+        this.enemies.push(new Enemy(spec.type, startX + col * spec.gapX, startY + row * spec.gapY, slot, formationWidth, this.difficulty, this.stage.tuning));
         slot += 1;
       }
     }
@@ -439,7 +451,38 @@ export class GameWorld {
   spawnBoss() {
     this.state = 'boss';
     this.boss = new Boss(this.stage.boss, this.difficulty);
-    this.onMessage?.('紅月ノヲロチを確認。攻撃パターンを見極めてください。', 'danger');
+    this.onMessage?.(`${this.stage.boss.name}を確認。攻撃パターンを見極めてください。`, 'danger');
+  }
+
+  completeStage() {
+    this.state = 'stageClear';
+    this.stageTransition = 3.3;
+    this.input.clear();
+    this.enemies = [];
+    this.projectiles = [];
+    this.boss = null;
+    this.createBarriers();
+    this.player.energy = Math.max(this.player.energy, this.stage.restoreEnergy || 50);
+    this.banner = { title: 'BARRIER RESTORED', text: this.stage.transitionText, time: 3.3, maxTime: 3.3 };
+    this.flash = 0.34;
+    this.shake = 0.52;
+    this.audio.clear();
+    this.onMessage?.(this.stage.transitionText, 'skill');
+  }
+
+  beginNextStage() {
+    this.stageIndex += 1;
+    this.stage = STAGES[this.stageIndex];
+    this.waveIndex = 0;
+    this.waveDelay = 0;
+    this.enemies = [];
+    this.projectiles = [];
+    this.particles = [];
+    this.boss = null;
+    this.createBarriers();
+    this.state = 'intro';
+    this.banner = { title: `${this.stage.chapter} — ${this.stage.name}`, text: this.stage.intro, time: 2.8, maxTime: 2.8 };
+    this.onMessage?.(`${this.stage.name}へ到達。結界を展開してください。`, 'info');
   }
 
   finish(result) {
@@ -449,7 +492,7 @@ export class GameWorld {
     const currentHighScore = Number(localStorage.getItem(this.highScoreKey()) || 0);
     const isNewRecord = this.score > currentHighScore;
     if (isNewRecord) localStorage.setItem(this.highScoreKey(), String(this.score));
-    this.onFinish?.({ result, score: this.score, highScore: Math.max(this.score, currentHighScore), isNewRecord, wave: this.waveIndex, combo: this.combo, difficulty: this.difficulty });
+    this.onFinish?.({ result, score: this.score, highScore: Math.max(this.score, currentHighScore), isNewRecord, wave: this.waveIndex, stageIndex: this.stageIndex + 1, stageCount: STAGES.length, stage: this.stage, combo: this.combo, difficulty: this.difficulty });
   }
 
   togglePause() {
@@ -476,7 +519,10 @@ export class GameWorld {
       combo: this.combo,
       comboTimer: this.comboTimer,
       wave: Math.min(this.waveIndex + (this.state === 'boss' ? 1 : 0), this.stage.waves.length + 1),
-      boss: this.boss && !this.boss.dead ? { hp: this.boss.hp, maxHp: this.boss.maxHp, name: this.boss.name } : null,
+      stageIndex: this.stageIndex + 1,
+      stageCount: STAGES.length,
+      stage: this.stage,
+      boss: this.boss && !this.boss.dead ? { hp: this.boss.hp, maxHp: this.boss.maxHp, name: this.boss.name, kind: this.boss.kind } : null,
       difficulty: this.difficulty,
       state: this.state,
     });
@@ -541,6 +587,18 @@ class CanvasRenderer {
   }
 
   drawBackground(world) {
+    if (world.stage.theme === 'water') {
+      this.drawWaterBackground(world);
+      return;
+    }
+    if (world.stage.theme === 'mountain') {
+      this.drawMountainBackground(world);
+      return;
+    }
+    this.drawToriiBackground(world);
+  }
+
+  drawToriiBackground(world) {
     const { ctx } = this;
     const gradient = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
     gradient.addColorStop(0, '#04051b');
@@ -612,6 +670,132 @@ class CanvasRenderer {
       ctx.moveTo(x, y);
       ctx.lineTo(x, y + 18 + (i % 3) * 12);
       ctx.stroke();
+    }
+  }
+
+  drawWaterBackground(world) {
+    const { ctx } = this;
+    const sky = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+    sky.addColorStop(0, '#031826');
+    sky.addColorStop(0.55, '#07536c');
+    sky.addColorStop(1, '#031c31');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    const moonX = GAME_WIDTH * 0.5;
+    const moonY = 142;
+    const moon = ctx.createRadialGradient(moonX - 18, moonY - 18, 12, moonX, moonY, 98);
+    moon.addColorStop(0, 'rgba(226, 255, 255, .98)');
+    moon.addColorStop(0.55, 'rgba(112, 247, 255, .82)');
+    moon.addColorStop(1, 'rgba(71, 220, 255, 0)');
+    ctx.fillStyle = moon;
+    ctx.beginPath(); ctx.arc(moonX, moonY, 98, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = 'rgba(183, 246, 255, .42)';
+    this.stars.slice(0, 52).forEach((star) => {
+      const twinkle = Math.sin(world.elapsed * 1.4 + star.y) * 0.15;
+      ctx.globalAlpha = star.a + twinkle;
+      ctx.fillRect(star.x, star.y * .72, star.s, star.s);
+    });
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = 'rgba(4, 22, 43, .74)';
+    for (let i = 0; i < 10; i += 1) {
+      const x = i * 108 - 35;
+      const y = 282 + (i % 3) * 9;
+      ctx.fillRect(x, y, 92, 74);
+      ctx.beginPath(); ctx.moveTo(x - 12, y); ctx.lineTo(x + 46, y - 35); ctx.lineTo(x + 104, y); ctx.fill();
+    }
+
+    ctx.strokeStyle = 'rgba(255, 208, 103, .45)';
+    ctx.lineWidth = 3;
+    [116, 844].forEach((x) => {
+      ctx.beginPath(); ctx.moveTo(x - 125, 319); ctx.quadraticCurveTo(x, 254, x + 125, 319); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x - 125, 321); ctx.lineTo(x + 125, 321); ctx.stroke();
+      for (let n = -2; n <= 2; n += 1) {
+        ctx.fillStyle = 'rgba(255, 209, 102, .72)';
+        ctx.fillRect(x + n * 44 - 3, 299, 6, 12);
+      }
+    });
+
+    const water = ctx.createLinearGradient(0, 315, 0, GAME_HEIGHT);
+    water.addColorStop(0, 'rgba(13, 87, 118, .48)');
+    water.addColorStop(1, 'rgba(2, 12, 32, .88)');
+    ctx.fillStyle = water; ctx.fillRect(0, 315, GAME_WIDTH, GAME_HEIGHT - 315);
+    for (let i = 0; i < 24; i += 1) {
+      const y = 326 + i * 13;
+      const width = 90 + (i * 57) % 290;
+      const x = (i * 133 + 36) % (GAME_WIDTH - width);
+      ctx.strokeStyle = `rgba(84, 235, 255, ${0.14 + (i % 4) * .06})`;
+      ctx.lineWidth = 1 + (i % 2);
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + width, y); ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(112, 244, 255, .17)';
+    for (let i = 0; i < 7; i += 1) {
+      const y = 375 + i * 25;
+      ctx.beginPath(); ctx.ellipse(moonX, y, 140 - i * 11, 8, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    for (let i = 0; i < 12; i += 1) {
+      const x = (i * 137 + 65) % GAME_WIDTH;
+      const y = 55 + ((world.elapsed * 24 + i * 76) % 360);
+      ctx.fillStyle = `rgba(190, 103, 255, ${0.22 + (i % 3) * .1})`;
+      ctx.beginPath(); ctx.ellipse(x, y, 5 + (i % 3) * 2, 9 + (i % 4) * 2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(195, 119, 255, .38)'; ctx.beginPath(); ctx.moveTo(x, y + 7); ctx.lineTo(x, y + 26 + (i % 3) * 8); ctx.stroke();
+    }
+  }
+
+  drawMountainBackground(world) {
+    const { ctx } = this;
+    const sky = ctx.createLinearGradient(0, 0, 0, GAME_HEIGHT);
+    sky.addColorStop(0, '#160821');
+    sky.addColorStop(0.48, '#481039');
+    sky.addColorStop(1, '#0c071d');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+
+    const moonX = GAME_WIDTH * 0.5;
+    const moonY = 123;
+    ctx.save();
+    ctx.shadowColor = COLORS.crimson; ctx.shadowBlur = 32;
+    ctx.fillStyle = '#be214c'; ctx.beginPath(); ctx.arc(moonX, moonY, 104, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#120618'; ctx.beginPath(); ctx.arc(moonX + 12, moonY + 3, 90, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    ctx.fillStyle = 'rgba(246, 144, 192, .42)';
+    this.stars.slice(0, 70).forEach((star) => {
+      ctx.globalAlpha = star.a + Math.sin(world.elapsed * 1.6 + star.x) * .15;
+      ctx.fillRect(star.x, star.y * .82, star.s, star.s);
+    });
+    ctx.globalAlpha = 1;
+
+    ctx.fillStyle = '#110b22';
+    for (let i = 0; i < 13; i += 1) {
+      const x = i * 82 - 36;
+      const h = 78 + (i * 41) % 142;
+      ctx.beginPath(); ctx.moveTo(x, 348); ctx.lineTo(x + 42, 348 - h); ctx.lineTo(x + 94, 348); ctx.fill();
+    }
+    ctx.fillStyle = '#20102e';
+    for (let i = 0; i < 9; i += 1) {
+      const x = i * 120 + 18;
+      const y = 228 + (i % 3) * 31;
+      ctx.fillRect(x, y, 46, 28);
+      ctx.beginPath(); ctx.moveTo(x - 12, y); ctx.lineTo(x + 23, y - 27); ctx.lineTo(x + 58, y); ctx.fill();
+    }
+
+    const floor = ctx.createLinearGradient(0, 302, 0, GAME_HEIGHT);
+    floor.addColorStop(0, '#1b102d'); floor.addColorStop(1, '#050313');
+    ctx.fillStyle = floor; ctx.fillRect(0, 302, GAME_WIDTH, GAME_HEIGHT - 302);
+    ctx.strokeStyle = 'rgba(255, 63, 122, .24)'; ctx.lineWidth = 1;
+    for (let y = 314; y < GAME_HEIGHT; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GAME_WIDTH, y); ctx.stroke(); }
+    for (let x = 0; x < GAME_WIDTH; x += 58) { ctx.beginPath(); ctx.moveTo(x, 303); ctx.lineTo(x + (x - GAME_WIDTH / 2) * .92, GAME_HEIGHT); ctx.stroke(); }
+
+    for (let i = 0; i < 10; i += 1) {
+      const startX = (i * 121 + 35) % GAME_WIDTH;
+      const startY = ((world.elapsed * 115 + i * 97) % 420) - 52;
+      ctx.strokeStyle = `rgba(215, 79, 255, ${0.21 + (i % 3) * .08})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(startX - 45, startY + 70); ctx.stroke();
     }
   }
 
@@ -713,6 +897,17 @@ class CanvasRenderer {
       ctx.fillStyle = type.accent;
       ctx.fillRect(-17, -14, 34, 5); ctx.fillRect(-17, 10, 34, 4);
       ctx.strokeStyle = COLORS.ink; ctx.beginPath(); ctx.moveTo(0, 17); ctx.lineTo(0, 25); ctx.stroke();
+    } else if (typeKey === 'tengu') {
+      ctx.fillStyle = type.color;
+      ctx.beginPath();
+      ctx.moveTo(0, -19); ctx.lineTo(13, -6); ctx.lineTo(19, 13); ctx.lineTo(0, 18); ctx.lineTo(-19, 13); ctx.lineTo(-13, -6); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = COLORS.gold;
+      ctx.beginPath(); ctx.moveTo(0, -8); ctx.lineTo(7, 5); ctx.lineTo(0, 11); ctx.lineTo(-7, 5); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = COLORS.gold; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(-16, 5); ctx.lineTo(-30, -3); ctx.lineTo(-21, 14); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(16, 5); ctx.lineTo(30, -3); ctx.lineTo(21, 14); ctx.stroke();
+      ctx.fillStyle = COLORS.ink; ctx.fillRect(-10, -3, 6, 3); ctx.fillRect(4, -3, 6, 3);
     } else {
       ctx.strokeStyle = type.color;
       ctx.lineWidth = 5;
@@ -726,6 +921,18 @@ class CanvasRenderer {
   }
 
   drawBoss(boss) {
+    if (boss.kind === 'kappa') {
+      this.drawKappaBoss(boss);
+      return;
+    }
+    if (boss.kind === 'yatagarasu') {
+      this.drawYatagarasuBoss(boss);
+      return;
+    }
+    this.drawOrochiBoss(boss);
+  }
+
+  drawOrochiBoss(boss) {
     const { ctx } = this;
     const x = boss.x; const y = boss.y; const w = boss.w; const h = boss.h;
     ctx.save();
@@ -759,6 +966,85 @@ class CanvasRenderer {
       ctx.beginPath();
       ctx.arc(x + w / 2, y + h / 2, 88 + i * 11, Math.PI * 1.1, Math.PI * 1.9);
       ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawKappaBoss(boss) {
+    const { ctx } = this;
+    const { x, y, w, h } = boss;
+    ctx.save();
+    ctx.shadowColor = COLORS.cyan;
+    ctx.shadowBlur = 25;
+    ctx.fillStyle = boss.flash > 0 ? '#e6ffff' : '#0d3158';
+    ctx.strokeStyle = '#69f4ff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(x + w / 2, y + h * .58, w * .39, h * .36, 0, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#0a1e3d';
+    ctx.beginPath(); ctx.ellipse(x + w / 2, y + h * .6, w * .24, h * .25, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = COLORS.gold;
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 8; i += 1) {
+      const angle = (i / 8) * Math.PI * 2;
+      const px = x + w / 2 + Math.cos(angle) * w * .18;
+      const py = y + h * .6 + Math.sin(angle) * h * .18;
+      ctx.beginPath(); ctx.moveTo(x + w / 2, y + h * .6); ctx.lineTo(px, py); ctx.stroke();
+    }
+    const core = ctx.createRadialGradient(x + w / 2 - 8, y + h * .58 - 8, 4, x + w / 2, y + h * .58, 34);
+    core.addColorStop(0, '#efffff'); core.addColorStop(.42, COLORS.cyan); core.addColorStop(1, '#075b9b');
+    ctx.fillStyle = core; ctx.beginPath(); ctx.arc(x + w / 2, y + h * .58, 32, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = boss.flash > 0 ? '#f0ffff' : '#17608e';
+    ctx.strokeStyle = COLORS.cyan;
+    ctx.beginPath(); ctx.arc(x + w / 2, y + h * .22, 35, Math.PI, 0); ctx.lineTo(x + w * .63, y + h * .42); ctx.lineTo(x + w * .37, y + h * .42); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = COLORS.gold; ctx.beginPath(); ctx.arc(x + w / 2, y + h * .13, 17, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = COLORS.ink; ctx.fillRect(x + w * .42, y + h * .31, 12, 4); ctx.fillRect(x + w * .53, y + h * .31, 12, 4);
+    ctx.strokeStyle = 'rgba(105, 244, 255, .48)';
+    for (let i = 0; i < 4; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      ctx.beginPath(); ctx.arc(x + w / 2 + side * 92, y + h * .57, 44 + i * 12, side < 0 ? Math.PI * .55 : Math.PI * .95, side < 0 ? Math.PI * 1.45 : Math.PI * .05); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  drawYatagarasuBoss(boss) {
+    const { ctx } = this;
+    const { x, y, w, h } = boss;
+    const cx = x + w / 2;
+    const cy = y + h * .56;
+    ctx.save();
+    ctx.shadowColor = COLORS.gold;
+    ctx.shadowBlur = 28;
+    ctx.strokeStyle = COLORS.gold;
+    ctx.fillStyle = boss.flash > 0 ? '#fff5cf' : '#1c1427';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 6; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const tier = Math.floor(i / 2);
+      const tx = cx + side * (80 + tier * 28);
+      const ty = cy - 18 - tier * 21;
+      ctx.beginPath();
+      ctx.moveTo(cx + side * 20, cy + 16);
+      ctx.quadraticCurveTo(tx, ty - 62, tx + side * 42, ty + 22);
+      ctx.quadraticCurveTo(tx + side * 12, ty + 48, cx + side * 12, cy + 22);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgba(199, 77, 255, .52)';
+      ctx.beginPath(); ctx.moveTo(cx + side * 26, cy + 11); ctx.lineTo(tx + side * 21, ty - 24); ctx.lineTo(tx + side * 29, ty + 13); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = boss.flash > 0 ? '#fff5cf' : '#1c1427';
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx, y + 7); ctx.lineTo(cx + 39, y + 45); ctx.lineTo(cx + 27, y + h * .82); ctx.lineTo(cx, y + h + 5); ctx.lineTo(cx - 27, y + h * .82); ctx.lineTo(cx - 39, y + 45); ctx.closePath();
+    ctx.fill(); ctx.stroke();
+    ctx.fillStyle = COLORS.gold;
+    ctx.beginPath(); ctx.moveTo(cx, y + 27); ctx.lineTo(cx + 12, y + 55); ctx.lineTo(cx, y + 74); ctx.lineTo(cx - 12, y + 55); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = COLORS.crimson;
+    ctx.shadowColor = COLORS.crimson; ctx.shadowBlur = 20;
+    ctx.beginPath(); ctx.arc(cx, y + h * .48, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = COLORS.paper; ctx.fillRect(cx - 2, y + h * .48 - 8, 4, 16);
+    ctx.strokeStyle = 'rgba(255, 77, 109, .42)'; ctx.lineWidth = 2;
+    for (let i = 0; i < 5; i += 1) {
+      ctx.beginPath(); ctx.arc(cx, cy, 82 + i * 14, Math.PI * 1.1, Math.PI * 1.9); ctx.stroke();
     }
     ctx.restore();
   }
@@ -797,7 +1083,15 @@ class CanvasRenderer {
     projectiles.forEach((projectile) => {
       ctx.save();
       const isPlayer = projectile.faction === 'player';
-      const color = isPlayer ? COLORS.cyan : projectile.style === 'boss' ? COLORS.magenta : COLORS.vermilion;
+      const color = isPlayer
+        ? COLORS.cyan
+        : projectile.style === 'boss-kappa'
+          ? '#69f4ff'
+          : projectile.style === 'boss-yatagarasu'
+            ? COLORS.gold
+            : projectile.style === 'boss-orochi'
+              ? COLORS.magenta
+              : COLORS.vermilion;
       projectile.trail.forEach((point) => {
         ctx.globalAlpha = point.life / 0.18 * .22;
         ctx.fillStyle = color;

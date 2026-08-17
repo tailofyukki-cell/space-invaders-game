@@ -15,6 +15,7 @@ const elements = {
   pause: document.getElementById('pause-btn'),
   score: document.getElementById('score-value'),
   wave: document.getElementById('wave-value'),
+  waveLabel: document.getElementById('wave-label'),
   hp: document.getElementById('hp-value'),
   toast: document.getElementById('message-toast'),
   resultTitle: document.getElementById('result-title'),
@@ -97,7 +98,8 @@ function showScreen(name) {
 
 function updateHud(snapshot) {
   elements.score.textContent = String(snapshot.score).padStart(7, '0');
-  elements.wave.textContent = String(snapshot.wave).padStart(2, '0');
+  elements.waveLabel.textContent = `STAGE ${snapshot.stageIndex}/${snapshot.stageCount}`;
+  elements.wave.textContent = `${String(snapshot.stageIndex).padStart(2, '0')}-${String(snapshot.wave).padStart(2, '0')}`;
   elements.hp.innerHTML = Array.from({ length: snapshot.maxHp }, (_, index) => `<span class="hp-pip ${index >= snapshot.hp ? 'empty' : ''}"></span>`).join('');
 }
 
@@ -116,8 +118,8 @@ function showResult(result) {
   elements.resultKicker.textContent = cleared ? 'MISSION COMPLETE' : 'MISSION REPORT';
   elements.resultTitle.textContent = cleared ? '結界維持成功' : '結界崩壊';
   elements.resultCopy.textContent = cleared
-    ? '紅月ノヲロチを浄化しました。月都の夜は、ひとまず静けさを取り戻します。'
-    : '結界機《カグラ》が戦闘不能になりました。パターンを見極め、もう一度結界を展開してください。';
+    ? `第三結界までの穢れを浄化しました。月都の夜は、ひとまず静けさを取り戻します。全${result.stageCount}結界の復旧を確認。`
+    : `第${result.stageIndex}結界で結界機《カグラ》が戦闘不能になりました。パターンを見極め、もう一度結界を展開してください。`;
   elements.resultScore.textContent = String(result.score).padStart(7, '0');
   elements.resultHighScore.textContent = String(result.highScore).padStart(7, '0');
   elements.resultCombo.textContent = `${result.combo}`;

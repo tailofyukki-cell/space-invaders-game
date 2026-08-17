@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260817b">
+  <link rel="stylesheet" href="styles.css?v=20260817c">
 </head>
 <body>
   <main id="app" aria-live="polite">
@@ -64,7 +64,7 @@
     <section id="game-screen" class="screen game-screen hidden" aria-label="ゲーム画面">
       <div class="top-hud" aria-hidden="true">
         <div class="hud-block"><span class="hud-label">SCORE</span><strong id="score-value">0000000</strong></div>
-        <div class="hud-block hud-center"><span class="hud-label">WAVE</span><strong id="wave-value">01</strong></div>
+        <div class="hud-block hud-center"><span id="wave-label" class="hud-label">STAGE / WAVE</span><strong id="wave-value">01-01</strong></div>
         <div class="hud-block hud-right"><span class="hud-label">HP</span><span id="hp-value" class="hp-pips"></span></div>
       </div>
       <div class="game-frame">
@@ -119,6 +119,6 @@
       </div>
     </section>
   </main>
-  <script type="module" src="main.js?v=20260817b"></script>
+  <script type="module" src="main.js?v=20260817c"></script>
 </body>
 </html>

@@ -145,23 +145,67 @@ export const ENEMY_TYPES = {
     shotSpeed: 285,
     diveChance: 0.007,
   },
+  tengu: {
+    label: '天狗面ドローン',
+    color: '#ff6a65',
+    accent: COLORS.gold,
+    score: 470,
+    hp: 4,
+    speed: 62,
+    fireRate: 1.08,
+    shotSpeed: 305,
+    diveChance: 0.011,
+  },
 };
 
 export const STAGES = [
   {
-    id: 'wave-1',
+    id: 'torii-gate',
+    chapter: 'CHAPTER 01',
     name: '第一結界 — 朱ノ鳥居',
     intro: '穢機群、月都南門より侵入。結界を維持せよ。',
+    theme: 'torii',
+    transitionText: '南門結界、復旧。水鏡結界へ転送します。',
+    tuning: { hp: 1, fireRate: 1, shotSpeed: 1, diveChance: 1, formation: 1 },
+    restoreEnergy: 50,
     waves: [
       { type: 'oni', rows: 3, cols: 7, formation: 'march', gapX: 72, gapY: 48 },
       { type: 'kitsune', rows: 3, cols: 8, formation: 'march', gapX: 70, gapY: 50 },
       { type: 'chochin', rows: 2, cols: 9, formation: 'march', gapX: 68, gapY: 56 },
     ],
-    boss: {
-      name: '紅月ノヲロチ',
-      hp: 150,
-      score: 5000,
-    },
+    boss: { kind: 'orochi', name: '紅月ノヲロチ', hp: 150, score: 5000, color: '#36113a', accent: COLORS.magenta },
+  },
+  {
+    id: 'water-mirror',
+    chapter: 'CHAPTER 02',
+    name: '第二結界 — 碧ノ水鏡',
+    intro: '地下水路の鏡面結界が汚染されました。蒼い流れを取り戻してください。',
+    theme: 'water',
+    transitionText: '水鏡結界、浄化完了。黒曜霊峰へ最終転送します。',
+    tuning: { hp: 1.13, fireRate: 1.14, shotSpeed: 1.08, diveChance: 1.18, formation: 1.12 },
+    restoreEnergy: 50,
+    waves: [
+      { type: 'kitsune', rows: 3, cols: 8, formation: 'march', gapX: 70, gapY: 50 },
+      { type: 'chochin', rows: 3, cols: 8, formation: 'march', gapX: 68, gapY: 52 },
+      { type: 'hebi', rows: 3, cols: 7, formation: 'march', gapX: 74, gapY: 52 },
+    ],
+    boss: { kind: 'kappa', name: '蒼渦ノ河童', hp: 205, score: 7200, color: '#0c3159', accent: COLORS.cyan },
+  },
+  {
+    id: 'obsidian-peak',
+    chapter: 'CHAPTER 03',
+    name: '第三結界 — 黒曜霊峰',
+    intro: '蝕月が結界核を侵食しています。月都最深部で、元凶を断て。',
+    theme: 'mountain',
+    transitionText: '月都全結界、正常化。夜明けを確認しました。',
+    tuning: { hp: 1.28, fireRate: 1.28, shotSpeed: 1.17, diveChance: 1.48, formation: 1.27 },
+    restoreEnergy: 55,
+    waves: [
+      { type: 'hebi', rows: 3, cols: 8, formation: 'march', gapX: 70, gapY: 52 },
+      { type: 'tengu', rows: 3, cols: 8, formation: 'march', gapX: 70, gapY: 52 },
+      { type: 'oni', rows: 4, cols: 8, formation: 'march', gapX: 68, gapY: 46 },
+    ],
+    boss: { kind: 'yatagarasu', name: '天裂ノ八咫', hp: 270, score: 10500, color: '#21152f', accent: COLORS.gold },
   },
 ];
 
