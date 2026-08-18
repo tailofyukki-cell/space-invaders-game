@@ -1,6 +1,12 @@
 import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
 import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js';
 
+const TORII_GATE_LANES = Object.freeze([
+  { x: 242, width: 112, gateX: 278, gateY: 228, scale: 0.86 },
+  { x: 424, width: 112, gateX: 480, gateY: 196, scale: 1 },
+  { x: 606, width: 112, gateX: 682, gateY: 228, scale: 0.86 },
+]);
+
 const SPRITE_SOURCES = Object.freeze({
   kagura: 'assets/sprites/kagura.png',
   oni: 'assets/sprites/oni.png',
@@ -122,6 +128,8 @@ export class AudioManager {
   boost() { this.tone(470, 0.42, 'triangle', 0.1, 760); }
   shield() { this.tone(240, 0.54, 'sine', 0.11, 380); }
   shieldHit() { this.tone(680, 0.12, 'sine', 0.06, -210); }
+  thunderCharge() { this.tone(180, 0.48, 'sawtooth', 0.07, 520); }
+  thunderStrike() { this.tone(95, 0.24, 'square', 0.12, -48); }
 }
 
 export class GameWorld {
@@ -181,6 +189,7 @@ export class GameWorld {
     this.bossPhaseEffect = 0;
     this.bossDefeatEffect = 0;
     this.bossDefeatOrigin = null;
+    this.toriiLightningEffect = null;
   }
 
   resize() {
@@ -245,6 +254,10 @@ export class GameWorld {
     this.warningPulse = Math.max(0, this.warningPulse - dt);
     this.bossPhaseEffect = Math.max(0, this.bossPhaseEffect - dt);
     this.bossDefeatEffect = Math.max(0, this.bossDefeatEffect - dt);
+    if (this.toriiLightningEffect) {
+      this.toriiLightningEffect.time = Math.max(0, this.toriiLightningEffect.time - dt);
+      if (this.toriiLightningEffect.time <= 0) this.toriiLightningEffect = null;
+    }
     this.scoreBoostTimer = Math.max(0, this.scoreBoostTimer - dt);
     if (this.banner) {
       this.banner.time -= dt;
@@ -328,6 +341,51 @@ export class GameWorld {
     if (!this.boss || this.boss.dead) return;
     const shots = this.boss.update(dt);
     if (shots.length) this.projectiles.push(...shots);
+    this.boss.consumeEvents().forEach((event) => this.handleBossEvent(event));
+  }
+
+  handleBossEvent(event) {
+    if (event.type === 'torii-telegraph') {
+      this.banner = { title: '月喰みの門', text: '鳥居の点灯したレーンから退避せよ。', time: Math.min(1.15, event.duration + 0.25), maxTime: Math.min(1.15, event.duration + 0.25) };
+      this.warningPulse = Math.max(this.warningPulse, event.duration);
+      this.audio.thunderCharge();
+      this.onMessage?.('《月喰みの門》— 点灯した鳥居の直下から退避してください。', 'danger');
+      return;
+    }
+    if (event.type === 'torii-lightning') this.resolveToriiLightning(event.lane, event.damage);
+  }
+
+  resolveToriiLightning(laneIndex, damage) {
+    const lane = TORII_GATE_LANES[laneIndex];
+    if (!lane) return;
+    this.toriiLightningEffect = { lane: laneIndex, time: 0.24, maxTime: 0.24 };
+    const playerCenter = this.player.x + this.player.w / 2;
+    if (playerCenter >= lane.x && playerCenter <= lane.x + lane.width) this.applyPlayerDamage(damage, lane.x + lane.width / 2, this.player.y + this.player.h / 2, '雷光');
+    this.addParticles(lane.x + lane.width / 2, 210, COLORS.gold, 24, { life: 0.42, size: 4, vy: 95 });
+    this.shake = Math.max(this.shake, 0.48);
+    this.flash = Math.max(this.flash, 0.24);
+    this.audio.thunderStrike();
+  }
+
+  applyPlayerDamage(damage, impactX, impactY, source = '敵弾') {
+    if (this.player.isShielded()) {
+      if (this.player.absorbBarrierHit()) {
+        const x = this.player.x + this.player.w / 2;
+        const y = this.player.y + this.player.h / 2;
+        this.addParticles(x, y, COLORS.cyan, 18, { life: 0.38, size: 4 });
+        this.shake = Math.max(this.shake, 0.16);
+        this.audio.shieldHit();
+      }
+      return;
+    }
+    if (this.player.takeDamage(damage)) {
+      this.shake = Math.max(this.shake, 0.45);
+      this.flash = Math.max(this.flash, 0.2);
+      this.combo = 0;
+      this.addParticles(impactX, impactY, COLORS.crimson, 28, { life: 0.55, size: 4 });
+      this.audio.hit();
+      this.onMessage?.(`${source}を受けました。HPを確認してください。`, 'danger');
+    }
   }
 
   updateProjectiles(dt) {
@@ -398,24 +456,7 @@ export class GameWorld {
       } else {
         if (rectsOverlap(projectile, playerRect)) {
           projectile.dead = true;
-          if (this.player.isShielded()) {
-            if (this.player.absorbBarrierHit()) {
-              const x = this.player.x + this.player.w / 2;
-              const y = this.player.y + this.player.h / 2;
-              this.addParticles(x, y, COLORS.cyan, 18, { life: 0.38, size: 4 });
-              this.shake = Math.max(this.shake, 0.16);
-              this.audio.shieldHit();
-            }
-            return;
-          }
-          if (this.player.takeDamage(projectile.damage)) {
-            this.shake = 0.45;
-            this.flash = 0.2;
-            this.combo = 0;
-            this.addParticles(this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, COLORS.crimson, 28, { life: 0.55, size: 4 });
-            this.audio.hit();
-            this.onMessage?.('結界機、被弾。HPを確認してください。', 'danger');
-          }
+          this.applyPlayerDamage(projectile.damage, this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, '敵弾');
           return;
         }
       }
@@ -854,6 +895,7 @@ class CanvasRenderer {
       ctx.beginPath(); ctx.arc(GAME_WIDTH / 2, GAME_HEIGHT * .68, radius, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = `rgba(${stageColor}, ${(1 - progress) * .08})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     }
+    if (world.toriiLightningEffect) this.drawToriiLightning(world, world.toriiLightningEffect);
     ctx.restore();
   }
 
@@ -920,6 +962,7 @@ class CanvasRenderer {
     ctx.moveTo(28, 191);
     ctx.lineTo(168, 191);
     ctx.stroke();
+    this.drawToriiGateArray(world);
 
     for (let i = 0; i < 17; i += 1) {
       const y = ((world.elapsed * 85 + i * 44) % GAME_HEIGHT) - 30;
@@ -930,6 +973,79 @@ class CanvasRenderer {
       ctx.lineTo(x, y + 18 + (i % 3) * 12);
       ctx.stroke();
     }
+  }
+
+  drawToriiGateArray(world) {
+    const { ctx } = this;
+    const boss = world.boss?.kind === 'orochi' ? world.boss : null;
+    const telegraphProgress = boss?.gateTelegraphMax ? 1 - boss.gateTelegraph / boss.gateTelegraphMax : 0;
+    ctx.save();
+    TORII_GATE_LANES.forEach((lane, index) => {
+      const sequential = boss?.gateTelegraph > 0 ? clamp(telegraphProgress * 3 - index + 0.34, 0, 1) : 0;
+      const targeted = boss?.gateTelegraph > 0 && boss.gateTarget === index;
+      const pressure = this.stagePressure(world);
+      const glow = targeted ? Math.max(sequential, .22) : sequential * .48 + pressure * .08;
+      const width = 60 * lane.scale;
+      const height = 78 * lane.scale;
+      const topY = lane.gateY - height;
+      const left = lane.gateX - width / 2;
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = .12 + glow * .76;
+      ctx.strokeStyle = targeted ? COLORS.gold : COLORS.crimson;
+      ctx.shadowColor = targeted ? COLORS.gold : COLORS.crimson;
+      ctx.shadowBlur = 10 + glow * 24;
+      ctx.lineWidth = 2 + glow * 2;
+      ctx.beginPath();
+      ctx.moveTo(left + width * .16, lane.gateY);
+      ctx.lineTo(left + width * .16, topY + 15);
+      ctx.lineTo(left + width * .84, topY + 15);
+      ctx.lineTo(left + width * .84, lane.gateY);
+      ctx.moveTo(left, topY + 15);
+      ctx.lineTo(left + width, topY + 15);
+      ctx.moveTo(left + width * .1, topY + 3);
+      ctx.lineTo(left + width * .9, topY + 3);
+      ctx.stroke();
+      if (targeted) {
+        const pulse = .12 + Math.sin(world.elapsed * 18) * .06 + glow * .22;
+        ctx.fillStyle = `rgba(255, 84, 137, ${pulse})`;
+        ctx.fillRect(lane.x, topY + 24, lane.width, GAME_HEIGHT - topY - 24);
+        ctx.strokeStyle = `rgba(255, 220, 120, ${.25 + glow * .5})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 7]);
+        ctx.beginPath(); ctx.moveTo(lane.x + 8, topY + 24); ctx.lineTo(lane.x + 8, GAME_HEIGHT - 48); ctx.moveTo(lane.x + lane.width - 8, topY + 24); ctx.lineTo(lane.x + lane.width - 8, GAME_HEIGHT - 48); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
+  drawToriiLightning(world, effect) {
+    const { ctx } = this;
+    const lane = TORII_GATE_LANES[effect.lane];
+    if (!lane) return;
+    const impact = effect.time / effect.maxTime;
+    const cx = lane.x + lane.width / 2;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255, 76, 139, ${impact * .16})`;
+    ctx.fillRect(lane.x, 176, lane.width, GAME_HEIGHT - 176);
+    for (let pass = 0; pass < 3; pass += 1) {
+      ctx.strokeStyle = pass === 0 ? `rgba(255, 251, 205, ${.95 * impact})` : `rgba(255, 55, 132, ${.5 * impact})`;
+      ctx.shadowColor = pass === 0 ? COLORS.gold : COLORS.crimson;
+      ctx.shadowBlur = 12 + pass * 10;
+      ctx.lineWidth = pass === 0 ? 5 : 12;
+      ctx.beginPath(); ctx.moveTo(cx, 170);
+      for (let y = 196; y < GAME_HEIGHT - 50; y += 31) {
+        const jitter = Math.sin(y * .17 + world.elapsed * 50 + pass) * (12 + pass * 5);
+        ctx.lineTo(cx + jitter, y);
+      }
+      ctx.stroke();
+    }
+    ctx.fillStyle = `rgba(255, 244, 182, ${.22 * impact})`;
+    ctx.beginPath(); ctx.ellipse(cx, GAME_HEIGHT - 56, lane.width * .54, 20, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   drawWaterBackground(world) {

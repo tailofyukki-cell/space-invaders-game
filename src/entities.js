@@ -261,6 +261,12 @@ export class Boss {
     this.enraged = false;
     this.phaseTransition = 0;
     this.phaseAnnounced = false;
+    this.gateCooldown = kind === 'orochi' ? 3.4 : 0;
+    this.gateTelegraph = 0;
+    this.gateTelegraphMax = 0;
+    this.gateTarget = 0;
+    this.gateStrike = 0;
+    this.pendingEvents = [];
     this.dead = false;
     this.flash = 0;
   }
@@ -278,6 +284,26 @@ export class Boss {
       return [];
     }
     if (this.phaseTransition > 0) return [];
+    if (this.kind === 'orochi') {
+      this.gateStrike = Math.max(0, this.gateStrike - dt);
+      if (this.gateTelegraph > 0) {
+        this.gateTelegraph = Math.max(0, this.gateTelegraph - dt);
+        if (this.gateTelegraph <= 0) {
+          this.gateStrike = 0.24;
+          this.pendingEvents.push({ type: 'torii-lightning', lane: this.gateTarget, damage: 1 });
+          this.gateCooldown = (this.enraged ? 3.55 : 4.65) / this.fireRate;
+        }
+        return [];
+      }
+      this.gateCooldown -= dt;
+      if (this.gateCooldown <= 0) {
+        this.gateTarget = (this.gateTarget + 1 + Math.floor(this.t * 0.19)) % 3;
+        this.gateTelegraphMax = (this.enraged ? 0.62 : 0.9) / Math.max(0.84, this.fireRate);
+        this.gateTelegraph = this.gateTelegraphMax;
+        this.pendingEvents.push({ type: 'torii-telegraph', lane: this.gateTarget, duration: this.gateTelegraphMax });
+        return [];
+      }
+    }
     const motion = this.kind === 'kappa'
       ? { sway: 148, xSpeed: 0.88, yAmp: 11, ySpeed: 2.7 }
       : this.kind === 'yatagarasu'
@@ -293,6 +319,12 @@ export class Boss {
       return this.attack();
     }
     return [];
+  }
+
+  consumeEvents() {
+    const events = this.pendingEvents;
+    this.pendingEvents = [];
+    return events;
   }
 
   attack() {

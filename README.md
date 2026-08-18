@@ -44,7 +44,7 @@ MVP版のインベーダーゲームを、**3ステージ・9ウェーブ・3ボ
 
 | 章 | ステージ | 背景・色彩 | ボス | 攻略の主題 |
 |---:|---|---|---|---|
-| 1 | **第一結界 — 朱ノ鳥居** | 藍の月夜、未来神社都市、朱い鳥居、青緑グリッド | 紅月ノヲロチ | 基本の扇状弾と結界解放を学ぶ。 |
+| 1 | **第一結界 — 朱ノ鳥居** | 藍の月夜、未来神社都市、朱い鳥居、青緑グリッド | 紅月ノヲロチ | 基本の扇状弾と結界解放を学ぶ。**《月喰みの門》**では点灯した鳥居のレーンから退避する。 |
 | 2 | **第二結界 — 碧ノ水鏡** | 青月、水面反射、灯籠橋、紫のデータ海月 | 蒼渦ノ河童 | 水流弾と渦弾の間隔を読み、横移動で回避する。 |
 | 3 | **第三結界 — 黒曜霊峰** | 紅い蝕月、山影、浮遊神社、紅紫グリッド | 天裂ノ八咫 | 多尾弾と放射弾を結界解放とともに攻略する。 |
 
@@ -141,6 +141,7 @@ space-invaders-game/
 ├── HEAL_ITEM_DESIGN.md    # 回復アイテムの出現・取得・難易度設計
 ├── SPECIAL_ITEMS_DESIGN.md # 倍率札・無敵結界を含む補助具システム設計
 ├── BOSS_BACKDROP_EXPANSION_PROPOSAL.md # ボス戦・背景豪華化の実装提案
+├── TORII_LIGHTNING_DESIGN.md # 第一結界・月喰みの門の演出仕様
 └── LICENSE                # MIT License
 ```
 
@@ -155,6 +156,7 @@ space-invaders-game/
 | [HEAL_ITEM_DESIGN.md](HEAL_ITEM_DESIGN.md) | 結界修復札の出現率、取得条件、回復量、難易度別のバランス仕様。 |
 | [SPECIAL_ITEMS_DESIGN.md](SPECIAL_ITEMS_DESIGN.md) | 結界修復札、輝星増幅札、無敵結界珠の効果、出現率、持続時間、競技性の保護。 |
 | [BOSS_BACKDROP_EXPANSION_PROPOSAL.md](BOSS_BACKDROP_EXPANSION_PROPOSAL.md) | 三結界のボス戦・背景バリエーション豪華化、技術方針、優先度、段階的な制作計画。 |
+| [TORII_LIGHTNING_DESIGN.md](TORII_LIGHTNING_DESIGN.md) | 第一結界《月喰みの門》の鳥居点灯、雷光予告、レーン判定、難易度差、受入基準。 |
 | [STRUCTURE.md](STRUCTURE.md) | ゲームロジック、描画、入力、音響、状態遷移の分離方針。 |
 | [ASSETS.md](ASSETS.md) | ネオン和風サイバーSFのアートディレクションと生成済み視覚基準。 |
 | [TEST_RESULTS.md](TEST_RESULTS.md) | タイトル、戦闘、三結界の背景、ボス、結果、設定、難易度の確認結果。 |
