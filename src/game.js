@@ -1,5 +1,5 @@
-import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817l';
-import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817l';
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817m';
+import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817m';
 
 const TORII_GATE_LANES = Object.freeze([
   { x: 242, width: 112, gateX: 278, gateY: 228, scale: 0.86 },
@@ -28,13 +28,20 @@ export class InputManager {
       skill: false,
       pause: false,
     };
+    this.keyboardKeys = new Set();
+    this.virtualActions = {
+      moveLeft: false,
+      moveRight: false,
+      fire: false,
+      skill: false,
+    };
     this.keyMap = {
       ArrowLeft: 'moveLeft',
       KeyA: 'moveLeft',
       ArrowRight: 'moveRight',
       KeyD: 'moveRight',
       Space: 'fire',
-      KeyZ: 'fire',
+      KeyZ: 'skill',
       ShiftLeft: 'skill',
       ShiftRight: 'skill',
       KeyX: 'skill',
@@ -57,7 +64,8 @@ export class InputManager {
       this.onPauseRequest?.();
       return;
     }
-    this.actions[action] = true;
+    this.keyboardKeys.add(event.code);
+    this.syncAction(action);
     this.onInteract?.();
   }
 
@@ -65,17 +73,31 @@ export class InputManager {
     const action = this.keyMap[event.code];
     if (!action) return;
     event.preventDefault();
-    if (action !== 'pause') this.actions[action] = false;
+    if (action !== 'pause') {
+      this.keyboardKeys.delete(event.code);
+      this.syncAction(action);
+    }
+  }
+
+  isKeyboardActionHeld(action) {
+    return [...this.keyboardKeys].some((code) => this.keyMap[code] === action);
+  }
+
+  syncAction(action) {
+    if (action in this.virtualActions) this.actions[action] = this.virtualActions[action] || this.isKeyboardActionHeld(action);
   }
 
   setAction(action, value) {
-    if (action in this.actions && action !== 'pause') {
-      this.actions[action] = value;
+    if (action in this.virtualActions) {
+      this.virtualActions[action] = value;
+      this.syncAction(action);
       if (value) this.onInteract?.();
     }
   }
 
   clear() {
+    this.keyboardKeys.clear();
+    Object.keys(this.virtualActions).forEach((key) => { this.virtualActions[key] = false; });
     Object.keys(this.actions).forEach((key) => { this.actions[key] = false; });
   }
 

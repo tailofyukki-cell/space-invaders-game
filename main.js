@@ -1,5 +1,5 @@
-import { DEFAULT_SETTINGS, DIFFICULTIES, STORAGE_KEYS, TEXT } from './src/config.js?v=20260817l';
-import { GameWorld } from './src/game.js?v=20260817l';
+import { DEFAULT_SETTINGS, DIFFICULTIES, STORAGE_KEYS, TEXT } from './src/config.js?v=20260817m';
+import { GameWorld } from './src/game.js?v=20260817m';
 
 const elements = {
   titleScreen: document.getElementById('title-screen'),
