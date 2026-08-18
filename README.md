@@ -140,6 +140,7 @@ space-invaders-game/
 ├── DIRECTION_DESIGN.md    # 背景・ボス・章遷移の演出強化設計
 ├── HEAL_ITEM_DESIGN.md    # 回復アイテムの出現・取得・難易度設計
 ├── SPECIAL_ITEMS_DESIGN.md # 倍率札・無敵結界を含む補助具システム設計
+├── BOSS_BACKDROP_EXPANSION_PROPOSAL.md # ボス戦・背景豪華化の実装提案
 └── LICENSE                # MIT License
 ```
 
@@ -153,6 +154,7 @@ space-invaders-game/
 | [DIRECTION_DESIGN.md](DIRECTION_DESIGN.md) | 三結界の環境演出、ボス覚醒、撃破、章遷移のタイムラインと品質基準。 |
 | [HEAL_ITEM_DESIGN.md](HEAL_ITEM_DESIGN.md) | 結界修復札の出現率、取得条件、回復量、難易度別のバランス仕様。 |
 | [SPECIAL_ITEMS_DESIGN.md](SPECIAL_ITEMS_DESIGN.md) | 結界修復札、輝星増幅札、無敵結界珠の効果、出現率、持続時間、競技性の保護。 |
+| [BOSS_BACKDROP_EXPANSION_PROPOSAL.md](BOSS_BACKDROP_EXPANSION_PROPOSAL.md) | 三結界のボス戦・背景バリエーション豪華化、技術方針、優先度、段階的な制作計画。 |
 | [STRUCTURE.md](STRUCTURE.md) | ゲームロジック、描画、入力、音響、状態遷移の分離方針。 |
 | [ASSETS.md](ASSETS.md) | ネオン和風サイバーSFのアートディレクションと生成済み視覚基準。 |
 | [TEST_RESULTS.md](TEST_RESULTS.md) | タイトル、戦闘、三結界の背景、ボス、結果、設定、難易度の確認結果。 |
