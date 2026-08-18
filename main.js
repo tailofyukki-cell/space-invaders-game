@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS, DIFFICULTIES, STORAGE_KEYS, TEXT } from './src/config.js';
-import { GameWorld } from './src/game.js?v=20260817d';
+import { GameWorld } from './src/game.js?v=20260817f';
 
 const elements = {
   titleScreen: document.getElementById('title-screen'),
@@ -49,14 +49,14 @@ applySettingsToUi();
 renderDifficultySelection();
 showScreen('title');
 
-elements.start.addEventListener('click', startGame);
-elements.retry.addEventListener('click', startGame);
-elements.returnTitle.addEventListener('click', returnToTitle);
-elements.settings.addEventListener('click', () => showScreen('settings'));
-elements.closeSettings.addEventListener('click', () => showScreen('title'));
-elements.pause.addEventListener('click', () => game.togglePause());
+bindActivate(elements.start, startGame);
+bindActivate(elements.retry, startGame);
+bindActivate(elements.returnTitle, returnToTitle);
+bindActivate(elements.settings, () => showScreen('settings'));
+bindActivate(elements.closeSettings, () => showScreen('title'));
+bindActivate(elements.pause, () => game.togglePause());
 elements.difficultyCards.forEach((card) => {
-  card.addEventListener('click', () => selectDifficulty(card.dataset.difficulty));
+  bindActivate(card, () => selectDifficulty(card.dataset.difficulty));
 });
 
 elements.soundSlider.addEventListener('input', () => {
@@ -76,6 +76,22 @@ setupDemoMode();
 document.addEventListener('visibilitychange', () => {
   if (document.hidden && ['intro', 'playing', 'bossWarning', 'boss'].includes(game.state)) game.togglePause();
 });
+
+function bindActivate(element, handler) {
+  let lastTouchTime = -Infinity;
+  element.addEventListener('touchend', (event) => {
+    if (event.cancelable) event.preventDefault();
+    lastTouchTime = performance.now();
+    handler();
+  }, { passive: false });
+  element.addEventListener('click', (event) => {
+    if (performance.now() - lastTouchTime < 700) {
+      event.preventDefault();
+      return;
+    }
+    handler();
+  });
+}
 
 function startGame() {
   showScreen('game');
@@ -136,26 +152,107 @@ function showMessage(text, type = 'info') {
 }
 
 function bindTouchControls() {
+  const touchCapable = navigator.maxTouchPoints > 0 || 'ontouchstart' in window || window.matchMedia('(pointer: coarse)').matches;
+  document.documentElement.classList.toggle('touch-device', touchCapable);
+  const usePointerEvents = 'PointerEvent' in window;
+
   document.querySelectorAll('[data-action]').forEach((button) => {
     const action = button.dataset.action;
-    const begin = (event) => {
-      event.preventDefault();
+    const activeInputs = new Set();
+    const setHeld = (inputId, held) => {
+      if (held) activeInputs.add(inputId);
+      else activeInputs.delete(inputId);
       game.audio.unlock();
-      game.input.setAction(action, true);
-      button.classList.add('is-held');
-      if (button.setPointerCapture && event.pointerId !== undefined) button.setPointerCapture(event.pointerId);
+      game.input.setAction(action, activeInputs.size > 0);
+      button.classList.toggle('is-held', activeInputs.size > 0);
     };
-    const end = (event) => {
-      event.preventDefault();
-      game.input.setAction(action, false);
-      button.classList.remove('is-held');
+    const consume = (event) => {
+      if (event.cancelable) event.preventDefault();
     };
-    button.addEventListener('pointerdown', begin);
-    button.addEventListener('pointerup', end);
-    button.addEventListener('pointercancel', end);
-    button.addEventListener('pointerleave', end);
+
+    if (usePointerEvents) {
+      const beginPointer = (event) => {
+        consume(event);
+        setHeld(`pointer-${event.pointerId}`, true);
+        if (button.setPointerCapture) {
+          try { button.setPointerCapture(event.pointerId); } catch { /* Safari may reject a stale pointer. */ }
+        }
+      };
+      const endPointer = (event) => {
+        consume(event);
+        setHeld(`pointer-${event.pointerId}`, false);
+      };
+      button.addEventListener('pointerdown', beginPointer, { passive: false });
+      button.addEventListener('pointerup', endPointer, { passive: false });
+      button.addEventListener('pointercancel', endPointer, { passive: false });
+      button.addEventListener('lostpointercapture', endPointer, { passive: false });
+      window.addEventListener('pointerup', endPointer, { passive: false });
+      window.addEventListener('pointercancel', endPointer, { passive: false });
+    } else {
+      const beginTouch = (event) => {
+        consume(event);
+        [...event.changedTouches].forEach((touch) => setHeld(`touch-${touch.identifier}`, true));
+      };
+      const endTouch = (event) => {
+        consume(event);
+        [...event.changedTouches].forEach((touch) => setHeld(`touch-${touch.identifier}`, false));
+      };
+      button.addEventListener('touchstart', beginTouch, { passive: false });
+      button.addEventListener('touchend', endTouch, { passive: false });
+      button.addEventListener('touchcancel', endTouch, { passive: false });
+    }
     button.addEventListener('contextmenu', (event) => event.preventDefault());
   });
+
+  bindCanvasTouchFallback(usePointerEvents);
+  window.addEventListener('blur', () => game.input.clear());
+}
+
+function bindCanvasTouchFallback(usePointerEvents) {
+  const activeTouches = new Map();
+  const actionForPoint = (clientX) => {
+    const rect = elements.canvas.getBoundingClientRect();
+    const ratio = (clientX - rect.left) / rect.width;
+    if (ratio < 0.34) return 'moveLeft';
+    if (ratio > 0.66) return 'moveRight';
+    return 'fire';
+  };
+  const updateAction = (id, action, pressed) => {
+    if (pressed) activeTouches.set(id, action);
+    else activeTouches.delete(id);
+    ['moveLeft', 'moveRight', 'fire'].forEach((name) => {
+      game.input.setAction(name, [...activeTouches.values()].includes(name));
+    });
+    if (pressed) game.audio.unlock();
+  };
+  const consume = (event) => {
+    if (event.cancelable) event.preventDefault();
+  };
+
+  if (usePointerEvents) {
+    elements.canvas.addEventListener('pointerdown', (event) => {
+      consume(event);
+      updateAction(`canvas-${event.pointerId}`, actionForPoint(event.clientX), true);
+      try { elements.canvas.setPointerCapture(event.pointerId); } catch { /* Browser fallback is handled by window events. */ }
+    }, { passive: false });
+    const releasePointer = (event) => updateAction(`canvas-${event.pointerId}`, '', false);
+    elements.canvas.addEventListener('pointerup', releasePointer, { passive: false });
+    elements.canvas.addEventListener('pointercancel', releasePointer, { passive: false });
+    elements.canvas.addEventListener('lostpointercapture', releasePointer, { passive: false });
+    window.addEventListener('pointerup', releasePointer, { passive: false });
+    window.addEventListener('pointercancel', releasePointer, { passive: false });
+  } else {
+    elements.canvas.addEventListener('touchstart', (event) => {
+      consume(event);
+      [...event.changedTouches].forEach((touch) => updateAction(`canvas-${touch.identifier}`, actionForPoint(touch.clientX), true));
+    }, { passive: false });
+    const releaseTouch = (event) => {
+      consume(event);
+      [...event.changedTouches].forEach((touch) => updateAction(`canvas-${touch.identifier}`, '', false));
+    };
+    elements.canvas.addEventListener('touchend', releaseTouch, { passive: false });
+    elements.canvas.addEventListener('touchcancel', releaseTouch, { passive: false });
+  }
 }
 
 function loadSettings() {
@@ -210,10 +307,10 @@ function renderDifficultySelection() {
 
 function setupDemoMode() {
   const params = new URLSearchParams(window.location.search);
+  if (params.has('debug')) window.__kagekiriDebug = game;
   if (!params.has('demo')) return;
   const requestedDifficulty = params.get('difficulty');
   if (requestedDifficulty && DIFFICULTIES[requestedDifficulty]) selectDifficulty(requestedDifficulty);
-  if (params.has('debug')) window.__kagekiriDebug = game;
   window.setTimeout(startGame, 180);
   const tick = (time) => {
     if (game.state === 'playing' || game.state === 'boss') {
