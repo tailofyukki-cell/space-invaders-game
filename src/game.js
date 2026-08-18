@@ -605,7 +605,9 @@ export class GameWorld {
         slot += 1;
       }
     }
-    this.banner = { title: `WAVE ${this.waveIndex + 1}`, text: `${ENEMY_TYPES[spec.type].label}編隊を迎撃せよ。`, time: 1.35, maxTime: 1.35 };
+    const waveEnergyBonus = this.difficulty.waveEnergyBonus || 0;
+    if (waveEnergyBonus > 0) this.player.energy = clamp(this.player.energy + waveEnergyBonus, 0, this.player.maxEnergy);
+    this.banner = { title: `WAVE ${this.waveIndex + 1}`, text: waveEnergyBonus > 0 ? `${ENEMY_TYPES[spec.type].label}編隊を迎撃せよ。見習い支援: 霊力を補給。` : `${ENEMY_TYPES[spec.type].label}編隊を迎撃せよ。`, time: 1.35, maxTime: 1.35 };
     this.waveIndex += 1;
   }
 
@@ -616,8 +618,15 @@ export class GameWorld {
     this.warningPulse = 1.35;
     this.banner = { title: `TARGET — ${this.stage.boss.name}`, text: this.boss.kind === 'orochi' ? '朱ノ結界、紅月反応を検出。' : this.boss.kind === 'kappa' ? '碧ノ水鏡、渦核の暴走を検出。' : '黒曜霊峰、狂月核の展開を確認。', time: 2.4, maxTime: 2.4 };
     this.shake = 0.28;
+    const bossShieldDuration = this.difficulty.bossShieldDuration || 0;
+    if (bossShieldDuration > 0) {
+      this.player.grantBarrier(bossShieldDuration);
+      this.addParticles(this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, COLORS.cyan, 30, { life: 0.8, size: 4 });
+      this.onMessage?.(`見習い支援結界を展開 — ${bossShieldDuration.toFixed(1)}秒。`, 'skill');
+    } else {
+      this.onMessage?.(`${this.stage.boss.name}を確認。攻撃パターンを見極めてください。`, 'danger');
+    }
     this.audio.boss();
-    this.onMessage?.(`${this.stage.boss.name}を確認。攻撃パターンを見極めてください。`, 'danger');
   }
 
   completeStage() {
@@ -631,11 +640,12 @@ export class GameWorld {
     this.boss = null;
     this.createBarriers();
     this.player.energy = Math.max(this.player.energy, this.stage.restoreEnergy || 50);
-    this.banner = { title: 'BARRIER RESTORED', text: this.stage.transitionText, time: 3.3, maxTime: 3.3 };
+    const stageHeal = this.player.heal(this.difficulty.stageHeal || 0);
+    this.banner = { title: 'BARRIER RESTORED', text: stageHeal > 0 ? `${this.stage.transitionText}　HP +${stageHeal}` : this.stage.transitionText, time: 3.3, maxTime: 3.3 };
     this.flash = 0.34;
     this.shake = 0.52;
     this.audio.clear();
-    this.onMessage?.(this.stage.transitionText, 'skill');
+    this.onMessage?.(stageHeal > 0 ? `${this.stage.transitionText}　見習い支援: HP +${stageHeal}` : this.stage.transitionText, 'skill');
   }
 
   beginNextStage() {
