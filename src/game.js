@@ -1,5 +1,5 @@
-import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
-import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js';
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817l';
+import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817l';
 
 const TORII_GATE_LANES = Object.freeze([
   { x: 242, width: 112, gateX: 278, gateY: 228, scale: 0.86 },
