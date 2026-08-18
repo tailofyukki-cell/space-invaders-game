@@ -104,3 +104,4 @@ GitHub Pagesのコミット`058607f`に対応する公開版で、EASY、NORMAL�
 | Canvasタップ代替 | 合格 | Pointer Eventsの入力種別に依存しない処理へ修正後、Canvas左端タップによる移動開始・解除を確認した。 |
 | 入力状態の最終検証 | 合格 | タッチ端末相当の検証値が`button:true/true;canvas:true/true;touch:flex`となり、仮想ボタンとCanvas代替の双方で開始・解除、操作UI表示を確認した。 |
 | 射撃・スキル・一時停止 | 合格 | タッチ相当の検証値が`fire:true/true skill:true/true pause:true/true ui:flex`となり、3操作の開始・解除または状態遷移と操作UI表示を確認した。 |
+| GitHub Pagesスマホ公開 | 合格 | コミット`6d233a5`の公開版で、タッチ開始・射撃の検証値が`publicStart:true fire:true/true ui:flex`となり、ゲーム遷移、射撃入力、仮想操作UIの配信を確認した。 |
