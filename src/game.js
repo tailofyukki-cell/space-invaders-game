@@ -168,6 +168,13 @@ export class GameWorld {
     this.banner = null;
     this.bossWarning = 0;
     this.stageTransition = 0;
+    this.stageIntroEffect = 0;
+    this.bossEntranceEffect = 0;
+    this.stageRestoreEffect = 0;
+    this.warningPulse = 0;
+    this.bossPhaseEffect = 0;
+    this.bossDefeatEffect = 0;
+    this.bossDefeatOrigin = null;
   }
 
   resize() {
@@ -188,6 +195,7 @@ export class GameWorld {
     this.state = 'intro';
     this.highScore = Number(localStorage.getItem(this.highScoreKey()) || 0);
     this.createBarriers();
+    this.stageIntroEffect = 2.7;
     this.banner = { title: `${this.stage.chapter} — ${this.stage.name}`, text: this.stage.intro, time: 2.7, maxTime: 2.7 };
     this.onMessage?.(`${this.difficulty.label}任務を開始します。第一結界を維持してください。`, 'info');
     this.onStateChange?.('playing');
@@ -225,6 +233,12 @@ export class GameWorld {
     this.elapsed += dt;
     this.flash = Math.max(0, this.flash - dt);
     this.shake = Math.max(0, this.shake - dt * 2.4);
+    this.stageIntroEffect = Math.max(0, this.stageIntroEffect - dt);
+    this.bossEntranceEffect = Math.max(0, this.bossEntranceEffect - dt);
+    this.stageRestoreEffect = Math.max(0, this.stageRestoreEffect - dt);
+    this.warningPulse = Math.max(0, this.warningPulse - dt);
+    this.bossPhaseEffect = Math.max(0, this.bossPhaseEffect - dt);
+    this.bossDefeatEffect = Math.max(0, this.bossDefeatEffect - dt);
     if (this.banner) {
       this.banner.time -= dt;
       if (this.banner.time <= 0) this.banner = null;
@@ -404,12 +418,30 @@ export class GameWorld {
 
   damageBoss(damage, skill) {
     const died = this.boss.hit(damage);
-    this.addParticles(this.boss.x + this.boss.w / 2, this.boss.y + this.boss.h / 2, skill ? COLORS.cyan : COLORS.magenta, died ? 100 : 10, { life: died ? 1.2 : 0.3, size: died ? 6 : 3 });
+    const bossX = this.boss.x + this.boss.w / 2;
+    const bossY = this.boss.y + this.boss.h / 2;
+    this.addParticles(bossX, bossY, skill ? COLORS.cyan : COLORS.magenta, died ? 100 : 10, { life: died ? 1.2 : 0.3, size: died ? 6 : 3 });
+    if (this.boss.enraged && !this.boss.phaseAnnounced) {
+      this.boss.phaseAnnounced = true;
+      this.bossPhaseEffect = 0.82;
+      this.warningPulse = 0.82;
+      this.projectiles.filter((projectile) => projectile.faction === 'enemy').forEach((projectile) => { projectile.dead = true; });
+      this.addParticles(bossX, bossY, this.boss.accent, 72, { life: 0.84, size: 5 });
+      this.banner = { title: `PHASE 02 — ${this.boss.name}`, text: this.boss.kind === 'orochi' ? '紅月結界、侵食率50%。雷光を回避せよ。' : this.boss.kind === 'kappa' ? '渦核暴走。水鏡の中心から離れろ。' : '狂月核、完全励起。六尾弾幕を警戒せよ。', time: 1.2, maxTime: 1.2 };
+      this.shake = 0.68;
+      this.flash = 0.45;
+      this.audio.boss();
+      this.onMessage?.(`${this.boss.name}が覚醒しました。`, 'danger');
+    }
     if (!died) return;
+    this.bossDefeatEffect = 1.55;
+    this.bossDefeatOrigin = { x: bossX, y: bossY, kind: this.boss.kind, accent: this.boss.accent };
+    this.projectiles.filter((projectile) => projectile.faction === 'enemy').forEach((projectile) => { projectile.dead = true; });
     this.score += Math.round((this.boss.score + this.combo * 35) * this.difficulty.scoreMultiplier);
     this.audio.clear();
     this.shake = 1;
     this.flash = 0.6;
+    this.banner = { title: 'PURIFICATION COMPLETE', text: `${this.boss.name}の穢れを浄化しました。`, time: 1.55, maxTime: 1.55 };
   }
 
   updateCombo(dt) {
@@ -428,6 +460,7 @@ export class GameWorld {
       if (this.waveDelay <= 0) this.beginWave();
     }
     if (this.state === 'boss' && this.boss?.dead) {
+      if (this.bossDefeatEffect > 0) return;
       if (this.stageIndex < STAGES.length - 1) this.completeStage();
       else this.finish('clear');
     }
@@ -438,6 +471,7 @@ export class GameWorld {
     if (!spec) {
       this.state = 'bossWarning';
       this.bossWarning = 2.1;
+      this.warningPulse = 2.1;
       this.banner = { title: 'WARNING', text: `大型穢機《${this.stage.boss.name}》接近。結界を最大出力へ。`, time: 2.1, maxTime: 2.1 };
       this.audio.boss();
       return;
@@ -463,12 +497,18 @@ export class GameWorld {
   spawnBoss() {
     this.state = 'boss';
     this.boss = new Boss(this.stage.boss, this.difficulty);
+    this.bossEntranceEffect = 2.4;
+    this.warningPulse = 1.35;
+    this.banner = { title: `TARGET — ${this.stage.boss.name}`, text: this.boss.kind === 'orochi' ? '朱ノ結界、紅月反応を検出。' : this.boss.kind === 'kappa' ? '碧ノ水鏡、渦核の暴走を検出。' : '黒曜霊峰、狂月核の展開を確認。', time: 2.4, maxTime: 2.4 };
+    this.shake = 0.28;
+    this.audio.boss();
     this.onMessage?.(`${this.stage.boss.name}を確認。攻撃パターンを見極めてください。`, 'danger');
   }
 
   completeStage() {
     this.state = 'stageClear';
     this.stageTransition = 3.3;
+    this.stageRestoreEffect = 3.3;
     this.input.clear();
     this.enemies = [];
     this.projectiles = [];
@@ -493,6 +533,7 @@ export class GameWorld {
     this.boss = null;
     this.createBarriers();
     this.state = 'intro';
+    this.stageIntroEffect = 2.8;
     this.banner = { title: `${this.stage.chapter} — ${this.stage.name}`, text: this.stage.intro, time: 2.8, maxTime: 2.8 };
     this.onMessage?.(`${this.stage.name}へ到達。結界を展開してください。`, 'info');
   }
@@ -612,11 +653,13 @@ class CanvasRenderer {
     const shake = world.getSettings().screenShake ? world.shake * 9 : 0;
     if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
     this.drawBackground(world);
+    this.drawCinematicEffects(world);
     this.drawBarriers(world.barriers);
     this.drawParticles(world.particles);
     this.drawProjectiles(world.projectiles);
     world.enemies.forEach((enemy) => this.drawEnemy(enemy));
     if (world.boss && !world.boss.dead) this.drawBoss(world.boss);
+    this.drawBossEffects(world);
     if (!world.player.dead) this.drawPlayer(world.player);
     if (world.skillPulse) this.drawSkillPulse(world.skillPulse);
     this.drawCanvasHud(world);
@@ -630,15 +673,110 @@ class CanvasRenderer {
   }
 
   drawBackground(world) {
+    if (world.stage.theme === 'water') this.drawWaterBackground(world);
+    else if (world.stage.theme === 'mountain') this.drawMountainBackground(world);
+    else this.drawToriiBackground(world);
+    this.drawStageAtmosphere(world);
+  }
+
+  stagePressure(world) {
+    if (world.state === 'boss') return 1;
+    if (world.state === 'bossWarning') return 0.76;
+    return 0;
+  }
+
+  drawStageAtmosphere(world) {
+    const { ctx } = this;
+    const pressure = this.stagePressure(world);
+    const time = world.elapsed;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
     if (world.stage.theme === 'water') {
-      this.drawWaterBackground(world);
-      return;
+      const horizon = 326;
+      for (let i = 0; i < 7; i += 1) {
+        const y = horizon + i * 27 + Math.sin(time * 2.4 + i) * 4;
+        const width = 110 + ((i * 61) % 210) + pressure * 84;
+        const x = (GAME_WIDTH / 2) - width / 2 + Math.sin(time * 1.15 + i) * 30;
+        ctx.strokeStyle = `rgba(117, 255, 251, ${0.1 + pressure * 0.12})`;
+        ctx.lineWidth = 1 + (i % 2);
+        ctx.beginPath(); ctx.ellipse(x + width / 2, y, width / 2, 5 + i * .8, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      for (let i = 0; i < 8; i += 1) {
+        const x = (i * 143 + time * 18) % (GAME_WIDTH + 80) - 40;
+        const y = 235 + Math.sin(time * 1.7 + i) * 32;
+        ctx.fillStyle = `rgba(157, 122, 255, ${0.12 + pressure * .12})`;
+        ctx.beginPath(); ctx.ellipse(x, y, 4, 16 + (i % 3) * 8, 0, 0, Math.PI * 2); ctx.fill();
+      }
+    } else if (world.stage.theme === 'mountain') {
+      for (let i = 0; i < 9; i += 1) {
+        const y = 200 + i * 31 + Math.sin(time * .8 + i * .9) * 12;
+        const alpha = 0.035 + pressure * .08;
+        ctx.fillStyle = `rgba(230, 107, 201, ${alpha})`;
+        ctx.beginPath(); ctx.ellipse(GAME_WIDTH / 2 + Math.sin(time * .45 + i) * 290, y, 250 - i * 9, 16, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      for (let i = 0; i < 16; i += 1) {
+        const x = (i * 79 + time * (22 + pressure * 48)) % (GAME_WIDTH + 90) - 45;
+        const y = (i * 53 + time * (58 + pressure * 90)) % 340;
+        ctx.strokeStyle = `rgba(255, 80, 151, ${0.09 + pressure * .15})`;
+        ctx.lineWidth = 1 + (i % 2);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 16, y + 24); ctx.stroke();
+      }
+    } else {
+      const moonX = 144; const moonY = 128;
+      for (let i = 0; i < 9; i += 1) {
+        const angle = time * (0.55 + pressure * .55) + i * (Math.PI * 2 / 9);
+        const radius = 78 + (i % 3) * 19 + pressure * 28;
+        const x = moonX + Math.cos(angle) * radius;
+        const y = moonY + Math.sin(angle) * radius;
+        ctx.save(); ctx.translate(x, y); ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = `rgba(255, 107, 172, ${0.12 + pressure * .17})`;
+        ctx.fillRect(-4, -9, 8, 18); ctx.restore();
+      }
+      if (pressure > 0) {
+        ctx.strokeStyle = `rgba(255, 72, 131, ${0.18 + Math.sin(time * 7) * .08})`;
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(moonX, moonY, 88 + i * 18 + Math.sin(time * 4 + i) * 4, 0, Math.PI * 2); ctx.stroke(); }
+      }
     }
-    if (world.stage.theme === 'mountain') {
-      this.drawMountainBackground(world);
-      return;
+    ctx.restore();
+  }
+
+  drawCinematicEffects(world) {
+    const { ctx } = this;
+    ctx.save();
+    const stageColor = world.stage.theme === 'water' ? '98, 246, 255' : world.stage.theme === 'mountain' ? '255, 77, 142' : '127, 247, 255';
+    if (world.stageIntroEffect > 0) {
+      const alpha = Math.min(.3, world.stageIntroEffect * .12);
+      ctx.fillStyle = `rgba(${stageColor}, ${alpha})`;
+      for (let y = 0; y < GAME_HEIGHT; y += 18) ctx.fillRect(0, y + ((world.elapsed * 95) % 18), GAME_WIDTH, 1);
+      const scanX = ((2.8 - world.stageIntroEffect) / 2.8) * GAME_WIDTH;
+      ctx.fillStyle = `rgba(${stageColor}, .18)`; ctx.fillRect(Math.max(0, scanX - 42), 0, 84, GAME_HEIGHT);
     }
-    this.drawToriiBackground(world);
+    if (world.warningPulse > 0) {
+      const pulse = .38 + Math.sin(world.elapsed * 15) * .16;
+      ctx.strokeStyle = `rgba(255, 62, 104, ${pulse})`;
+      ctx.lineWidth = 5; ctx.strokeRect(4, 4, GAME_WIDTH - 8, GAME_HEIGHT - 8);
+      ctx.fillStyle = `rgba(255, 45, 91, ${pulse * .08})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+    if (world.bossEntranceEffect > 0 && world.boss) {
+      const progress = 1 - world.bossEntranceEffect / 2.4;
+      const cx = world.boss.x + world.boss.w / 2;
+      const cy = world.boss.y + world.boss.h / 2;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = `rgba(${stageColor}, ${.55 * (1 - progress)})`;
+      ctx.lineWidth = 3;
+      for (let i = 0; i < 4; i += 1) { ctx.beginPath(); ctx.arc(cx, cy, 42 + progress * 300 + i * 22, 0, Math.PI * 2); ctx.stroke(); }
+    }
+    if (world.stageRestoreEffect > 0) {
+      const progress = 1 - world.stageRestoreEffect / 3.3;
+      const radius = progress * 760;
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = `rgba(${stageColor}, ${.78 * (1 - progress)})`;
+      ctx.lineWidth = 9 - progress * 5;
+      ctx.beginPath(); ctx.arc(GAME_WIDTH / 2, GAME_HEIGHT * .68, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(${stageColor}, ${(1 - progress) * .08})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+    ctx.restore();
   }
 
   drawToriiBackground(world) {
@@ -981,6 +1119,42 @@ class CanvasRenderer {
       return;
     }
     this.drawOrochiBoss(boss);
+  }
+
+  drawBossEffects(world) {
+    const { ctx } = this;
+    const boss = world.boss;
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    if (boss && !boss.dead && (boss.phaseTransition > 0 || world.bossPhaseEffect > 0)) {
+      const remain = Math.min(1, Math.max(boss.phaseTransition / .82, world.bossPhaseEffect / .82));
+      const progress = 1 - remain;
+      const cx = boss.x + boss.w / 2;
+      const cy = boss.y + boss.h / 2;
+      const accent = boss.kind === 'kappa' ? '96, 245, 255' : boss.kind === 'yatagarasu' ? '255, 83, 151' : '255, 76, 160';
+      ctx.fillStyle = `rgba(${accent}, ${0.12 + remain * .18})`; ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+      ctx.strokeStyle = `rgba(${accent}, ${0.78 * remain})`; ctx.lineWidth = 3 + remain * 5;
+      for (let i = 0; i < 5; i += 1) { ctx.beginPath(); ctx.arc(cx, cy, 48 + progress * 260 + i * 31, 0, Math.PI * 2); ctx.stroke(); }
+      for (let i = 0; i < 12; i += 1) {
+        const a = world.elapsed * 3 + i * Math.PI / 6;
+        const r = 72 + progress * 190;
+        ctx.fillStyle = `rgba(${accent}, ${0.62 * remain})`;
+        ctx.fillRect(cx + Math.cos(a) * r - 3, cy + Math.sin(a) * r - 9, 6, 18);
+      }
+    }
+    if (world.bossDefeatEffect > 0 && world.bossDefeatOrigin) {
+      const { x, y, accent } = world.bossDefeatOrigin;
+      const progress = 1 - world.bossDefeatEffect / 1.55;
+      ctx.strokeStyle = accent; ctx.globalAlpha = 1 - progress; ctx.lineWidth = 8 - progress * 5;
+      for (let i = 0; i < 3; i += 1) { ctx.beginPath(); ctx.arc(x, y, 38 + progress * (170 + i * 58), 0, Math.PI * 2); ctx.stroke(); }
+      for (let i = 0; i < 20; i += 1) {
+        const a = i * Math.PI * 2 / 20 + progress * .7;
+        const r = 40 + progress * 250;
+        ctx.fillStyle = i % 2 ? COLORS.gold : accent;
+        ctx.fillRect(x + Math.cos(a) * r - 3, y + Math.sin(a) * r - 3 - progress * 80, 6, 6);
+      }
+    }
+    ctx.restore();
   }
 
   drawOrochiBoss(boss) {

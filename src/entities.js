@@ -206,6 +206,9 @@ export class Boss {
     this.fireTimer = 1.2;
     this.pattern = 0;
     this.patternClock = 0;
+    this.enraged = false;
+    this.phaseTransition = 0;
+    this.phaseAnnounced = false;
     this.dead = false;
     this.flash = 0;
   }
@@ -213,6 +216,7 @@ export class Boss {
   update(dt) {
     this.t += dt;
     this.flash = Math.max(0, this.flash - dt);
+    this.phaseTransition = Math.max(0, this.phaseTransition - dt);
     if (this.phase === 'enter') {
       this.y += 75 * dt;
       if (this.y >= this.targetY) {
@@ -221,6 +225,7 @@ export class Boss {
       }
       return [];
     }
+    if (this.phaseTransition > 0) return [];
     const motion = this.kind === 'kappa'
       ? { sway: 148, xSpeed: 0.88, yAmp: 11, ySpeed: 2.7 }
       : this.kind === 'yatagarasu'
@@ -231,8 +236,8 @@ export class Boss {
     this.fireTimer -= dt;
     this.patternClock += dt;
     if (this.fireTimer <= 0) {
-      this.fireTimer = (this.hp < this.maxHp * 0.48 ? 0.55 : 0.85) / this.fireRate;
-      this.pattern = (this.pattern + 1) % 3;
+      this.fireTimer = ((this.hp < this.maxHp * 0.48 ? 0.55 : 0.85) * (this.enraged ? 0.72 : 1)) / this.fireRate;
+      this.pattern = (this.pattern + 1 + (this.enraged ? 1 : 0)) % 3;
       return this.attack();
     }
     return [];
@@ -244,19 +249,19 @@ export class Boss {
     const originY = this.y + this.h - 12;
     if (this.kind === 'kappa') {
       if (this.pattern === 0) {
-        const count = Math.max(5, Math.round(8 * this.shotCount));
+        const count = Math.max(5, Math.round(8 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / Math.max(1, count - 1) - 0.5) * 0.92;
           shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 175, vy: 205 + Math.cos(angle) * 62, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 11, h: 17, life: 4.4 }));
         }
       } else if (this.pattern === 1) {
-        const count = Math.max(7, Math.round(11 * this.shotCount));
+        const count = Math.max(7, Math.round(11 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / count) * Math.PI * 1.36 + this.t * 1.7;
           shots.push(new Projectile({ x: originX, y: originY, vx: Math.cos(angle) * 185, vy: 155 + Math.sin(angle) * 155, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 10, h: 16, life: 4.2 }));
         }
       } else {
-        const count = Math.max(3, Math.round(6 * this.shotCount));
+        const count = Math.max(3, Math.round(6 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const offset = i - (count - 1) / 2;
           shots.push(new Projectile({ x: originX + offset * 46, y: originY, vx: offset * 16, vy: 310, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 13, h: 23, life: 3.5 }));
@@ -266,19 +271,19 @@ export class Boss {
     }
     if (this.kind === 'yatagarasu') {
       if (this.pattern === 0) {
-        const count = Math.max(5, Math.round(7 * this.shotCount));
+        const count = Math.max(5, Math.round(7 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / Math.max(1, count - 1) - 0.5) * 1.28;
           shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 268, vy: 205 + Math.cos(angle) * 76, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 12, h: 19, life: 4.1 }));
         }
       } else if (this.pattern === 1) {
-        const count = Math.max(12, Math.round(18 * this.shotCount));
+        const count = Math.max(12, Math.round(18 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / count) * Math.PI * 2 + this.t * 1.35;
           shots.push(new Projectile({ x: originX, y: originY - 14, vx: Math.cos(angle) * 198, vy: Math.sin(angle) * 182 + 170, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 10, h: 15, life: 4 }));
         }
       } else {
-        const count = Math.max(5, Math.round(8 * this.shotCount));
+        const count = Math.max(5, Math.round(8 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const offset = i - (count - 1) / 2;
           shots.push(new Projectile({ x: originX + offset * 30, y: originY - 4, vx: offset * 54, vy: 360 - Math.abs(offset) * 28, faction: 'enemy', style: 'boss-yatagarasu', damage: 1, w: 12, h: 20, life: 3.3 }));
@@ -287,19 +292,19 @@ export class Boss {
       return shots;
     }
     if (this.pattern === 0) {
-      const count = Math.max(5, Math.round(9 * this.shotCount));
+      const count = Math.max(5, Math.round(9 * this.shotCount * (this.enraged ? 1.25 : 1)));
       for (let i = 0; i < count; i += 1) {
         const angle = (i / Math.max(1, count - 1) - 0.5) * 1.12;
         shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 210, vy: 220 + Math.cos(angle) * 48, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 11, h: 18, life: 4.2 }));
       }
     } else if (this.pattern === 1) {
-      const count = Math.max(3, Math.round(5 * this.shotCount));
+      const count = Math.max(3, Math.round(5 * this.shotCount * (this.enraged ? 1.25 : 1)));
       for (let i = 0; i < count; i += 1) {
         const offset = i - (count - 1) / 2;
         shots.push(new Projectile({ x: originX + offset * 34, y: originY, vx: offset * 38, vy: 325, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 12, h: 22, life: 3.2 }));
       }
     } else {
-      const count = Math.max(10, Math.round(16 * this.shotCount));
+      const count = Math.max(10, Math.round(16 * this.shotCount * (this.enraged ? 1.25 : 1)));
       for (let i = 0; i < count; i += 1) {
         const angle = (i / count) * Math.PI * 2 + this.t;
         shots.push(new Projectile({ x: originX, y: originY - 12, vx: Math.cos(angle) * 165, vy: Math.sin(angle) * 165 + 135, faction: 'enemy', style: 'boss-orochi', damage: 1, w: 9, h: 14, life: 3.8 }));
@@ -314,6 +319,13 @@ export class Boss {
     if (this.hp <= 0) {
       this.dead = true;
       return true;
+    }
+    if (!this.enraged && this.hp <= this.maxHp * 0.5) {
+      this.enraged = true;
+      this.phaseTransition = 0.82;
+      this.fireTimer = 1.1;
+      this.pattern = 2;
+      this.flash = 0.62;
     }
     return false;
   }
