@@ -1,5 +1,5 @@
 import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
-import { Barrier, Boss, Enemy, Particle, Player } from './entities.js';
+import { Barrier, Boss, Enemy, HealPickup, Particle, Player } from './entities.js';
 
 const SPRITE_SOURCES = Object.freeze({
   kagura: 'assets/sprites/kagura.png',
@@ -118,6 +118,7 @@ export class AudioManager {
   skill() { this.tone(150, 0.6, 'sine', 0.12, 760); }
   boss() { this.tone(90, 0.72, 'sawtooth', 0.11, 55); }
   clear() { this.tone(440, 0.75, 'triangle', 0.09, 450); }
+  heal() { this.tone(330, 0.34, 'sine', 0.09, 520); }
 }
 
 export class GameWorld {
@@ -154,6 +155,7 @@ export class GameWorld {
     this.enemies = [];
     this.projectiles = [];
     this.particles = [];
+    this.healItems = [];
     this.barriers = [];
     this.boss = null;
     this.skillPulse = null;
@@ -272,6 +274,7 @@ export class GameWorld {
     this.updateEnemies(dt);
     this.updateBoss(dt);
     this.updateProjectiles(dt);
+    this.updateHealItems(dt);
     this.updateSkill(dt);
     this.updateParticles(dt);
     this.resolveCollisions();
@@ -324,6 +327,10 @@ export class GameWorld {
 
   updateProjectiles(dt) {
     this.projectiles.forEach((projectile) => projectile.update(dt));
+  }
+
+  updateHealItems(dt) {
+    this.healItems.forEach((item) => item.update(dt));
   }
 
   updateSkill(dt) {
@@ -402,6 +409,20 @@ export class GameWorld {
         }
       }
     });
+    this.healItems.forEach((item) => {
+      if (item.dead || !rectsOverlap(item, playerRect)) return;
+      const healed = this.player.heal(1);
+      item.dead = true;
+      if (healed > 0) {
+        const x = item.x + item.w / 2;
+        const y = item.y + item.h / 2;
+        this.addParticles(x, y, COLORS.gold, 18, { life: 0.6, size: 4 });
+        this.addParticles(this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, '#8fffc3', 24, { life: 0.72, size: 3, vy: -45 });
+        this.flash = Math.max(this.flash, 0.16);
+        this.audio.heal();
+        this.onMessage?.('結界修復札を取得 — HP +1', 'skill');
+      }
+    });
     if (this.player.dead) this.finish('gameOver');
   }
 
@@ -413,7 +434,17 @@ export class GameWorld {
     this.combo += 1;
     this.comboTimer = 2.5;
     this.player.energy = clamp(this.player.energy + (skill ? 7 : 9) * this.difficulty.energyGain, 0, this.player.maxEnergy);
+    this.trySpawnHealPickup(enemy);
     this.audio.destroy();
+  }
+
+  trySpawnHealPickup(enemy) {
+    if (this.player.hp >= this.player.maxHp || this.healItems.length >= 2) return;
+    if (Math.random() >= this.difficulty.healDropChance) return;
+    const x = enemy.x + enemy.w / 2;
+    const y = enemy.y + enemy.h / 2;
+    this.healItems.push(new HealPickup(x, y));
+    this.addParticles(x, y, COLORS.gold, 10, { life: 0.45, size: 3 });
   }
 
   damageBoss(damage, skill) {
@@ -512,6 +543,7 @@ export class GameWorld {
     this.input.clear();
     this.enemies = [];
     this.projectiles = [];
+    this.healItems = [];
     this.boss = null;
     this.createBarriers();
     this.player.energy = Math.max(this.player.energy, this.stage.restoreEnergy || 50);
@@ -593,6 +625,7 @@ export class GameWorld {
   cleanup() {
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
+    this.healItems = this.healItems.filter((item) => !item.dead);
     this.particles = this.particles.filter((particle) => !particle.dead);
     this.barriers = this.barriers.filter((barrier) => !barrier.dead);
   }
@@ -660,6 +693,7 @@ class CanvasRenderer {
     world.enemies.forEach((enemy) => this.drawEnemy(enemy));
     if (world.boss && !world.boss.dead) this.drawBoss(world.boss);
     this.drawBossEffects(world);
+    this.drawHealItems(world.healItems);
     if (!world.player.dead) this.drawPlayer(world.player);
     if (world.skillPulse) this.drawSkillPulse(world.skillPulse);
     this.drawCanvasHud(world);
@@ -1303,6 +1337,38 @@ class CanvasRenderer {
     });
   }
 
+  drawHealItems(items) {
+    const { ctx } = this;
+    items.forEach((item) => {
+      const cx = item.x + item.w / 2;
+      const cy = item.y + item.h / 2;
+      const pulse = 0.72 + Math.sin(item.t * 7) * 0.18;
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      ctx.globalAlpha = pulse;
+      ctx.strokeStyle = 'rgba(143, 255, 195, .65)';
+      ctx.shadowColor = '#8fffc3';
+      ctx.shadowBlur = 16;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(cx, cy, 19 + Math.sin(item.t * 5) * 3, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.shadowColor = COLORS.gold;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = 'rgba(255, 244, 204, .96)';
+      ctx.strokeStyle = COLORS.gold;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - 10, cy - 15); ctx.lineTo(cx + 10, cy - 15); ctx.lineTo(cx + 10, cy + 12); ctx.lineTo(cx, cy + 17); ctx.lineTo(cx - 10, cy + 12); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#18bd83';
+      ctx.fillRect(cx - 2, cy - 8, 4, 16);
+      ctx.fillRect(cx - 8, cy - 2, 16, 4);
+      ctx.fillStyle = COLORS.cyan;
+      ctx.fillRect(cx - 7, cy - 12, 14, 2);
+      ctx.restore();
+    });
+  }
+
   drawProjectiles(projectiles) {
     const { ctx } = this;
     projectiles.forEach((projectile) => {
@@ -1386,6 +1452,12 @@ class CanvasRenderer {
     ctx.font = '700 10px "Noto Sans JP", sans-serif';
     ctx.fillStyle = world.difficulty.key === 'hard' ? COLORS.magenta : world.difficulty.key === 'easy' ? COLORS.gold : COLORS.cyan;
     ctx.fillText(`難度: ${world.difficulty.english}`, 26, 66);
+    if (world.healItems.length > 0) {
+      ctx.fillStyle = '#8fffc3';
+      ctx.shadowColor = '#8fffc3'; ctx.shadowBlur = 8;
+      ctx.fillText(`修復札 ×${world.healItems.length}`, 128, 66);
+      ctx.shadowBlur = 0;
+    }
 
     ctx.font = '600 12px "Noto Sans JP", sans-serif';
     ctx.fillStyle = COLORS.muted;

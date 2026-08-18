@@ -92,6 +92,35 @@ export class Player {
     if (this.hp <= 0) this.dead = true;
     return true;
   }
+
+  heal(amount = 1) {
+    if (this.dead || this.hp >= this.maxHp) return 0;
+    const before = this.hp;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
+    return this.hp - before;
+  }
+}
+
+export class HealPickup {
+  constructor(x, y) {
+    this.x = x - 14;
+    this.y = y - 12;
+    this.w = 28;
+    this.h = 34;
+    this.baseX = this.x;
+    this.vy = 78;
+    this.life = 6.5;
+    this.t = 0;
+    this.dead = false;
+  }
+
+  update(dt) {
+    this.t += dt;
+    this.life -= dt;
+    this.y += this.vy * dt;
+    this.x = this.baseX + Math.sin(this.t * 3.6) * 16;
+    if (this.life <= 0 || this.y > GAME_HEIGHT + 42) this.dead = true;
+  }
 }
 
 export class Enemy {

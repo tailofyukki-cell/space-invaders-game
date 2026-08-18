@@ -48,6 +48,7 @@ export const DIFFICULTIES = {
     bossShotCount: 0.75,
     energyGain: 1.45,
     barrierHp: 1.35,
+    healDropChance: 0.12,
     scoreMultiplier: 0.75,
   },
   normal: {
@@ -70,6 +71,7 @@ export const DIFFICULTIES = {
     bossShotCount: 1,
     energyGain: 1,
     barrierHp: 1,
+    healDropChance: 0.08,
     scoreMultiplier: 1,
   },
   hard: {
@@ -92,6 +94,7 @@ export const DIFFICULTIES = {
     bossShotCount: 1.25,
     energyGain: 0.78,
     barrierHp: 0.85,
+    healDropChance: 0.05,
     scoreMultiplier: 1.35,
   },
 };
