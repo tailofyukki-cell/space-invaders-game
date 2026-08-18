@@ -49,6 +49,10 @@ export const DIFFICULTIES = {
     energyGain: 1.45,
     barrierHp: 1.35,
     healDropChance: 0.12,
+    scoreDropChance: 0.07,
+    shieldDropChance: 0.05,
+    scoreBoostDuration: 8,
+    shieldDuration: 5,
     scoreMultiplier: 0.75,
   },
   normal: {
@@ -72,6 +76,10 @@ export const DIFFICULTIES = {
     energyGain: 1,
     barrierHp: 1,
     healDropChance: 0.08,
+    scoreDropChance: 0.06,
+    shieldDropChance: 0.04,
+    scoreBoostDuration: 7,
+    shieldDuration: 4.5,
     scoreMultiplier: 1,
   },
   hard: {
@@ -95,6 +103,10 @@ export const DIFFICULTIES = {
     energyGain: 0.78,
     barrierHp: 0.85,
     healDropChance: 0.05,
+    scoreDropChance: 0.04,
+    shieldDropChance: 0.03,
+    scoreBoostDuration: 6,
+    shieldDuration: 4,
     scoreMultiplier: 1.35,
   },
 };

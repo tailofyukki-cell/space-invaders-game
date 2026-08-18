@@ -1,5 +1,5 @@
 import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js';
-import { Barrier, Boss, Enemy, HealPickup, Particle, Player } from './entities.js';
+import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js';
 
 const SPRITE_SOURCES = Object.freeze({
   kagura: 'assets/sprites/kagura.png',
@@ -119,6 +119,9 @@ export class AudioManager {
   boss() { this.tone(90, 0.72, 'sawtooth', 0.11, 55); }
   clear() { this.tone(440, 0.75, 'triangle', 0.09, 450); }
   heal() { this.tone(330, 0.34, 'sine', 0.09, 520); }
+  boost() { this.tone(470, 0.42, 'triangle', 0.1, 760); }
+  shield() { this.tone(240, 0.54, 'sine', 0.11, 380); }
+  shieldHit() { this.tone(680, 0.12, 'sine', 0.06, -210); }
 }
 
 export class GameWorld {
@@ -155,12 +158,13 @@ export class GameWorld {
     this.enemies = [];
     this.projectiles = [];
     this.particles = [];
-    this.healItems = [];
+    this.specialItems = [];
     this.barriers = [];
     this.boss = null;
     this.skillPulse = null;
     this.formation = { offsetX: 0, direction: 1, speed: 32, drop: 0, minX: 100, maxX: 860 };
     this.score = 0;
+    this.scoreBoostTimer = 0;
     this.combo = 0;
     this.comboTimer = 0;
     this.highScore = 0;
@@ -241,6 +245,7 @@ export class GameWorld {
     this.warningPulse = Math.max(0, this.warningPulse - dt);
     this.bossPhaseEffect = Math.max(0, this.bossPhaseEffect - dt);
     this.bossDefeatEffect = Math.max(0, this.bossDefeatEffect - dt);
+    this.scoreBoostTimer = Math.max(0, this.scoreBoostTimer - dt);
     if (this.banner) {
       this.banner.time -= dt;
       if (this.banner.time <= 0) this.banner = null;
@@ -274,7 +279,7 @@ export class GameWorld {
     this.updateEnemies(dt);
     this.updateBoss(dt);
     this.updateProjectiles(dt);
-    this.updateHealItems(dt);
+    this.updateSpecialItems(dt);
     this.updateSkill(dt);
     this.updateParticles(dt);
     this.resolveCollisions();
@@ -329,8 +334,8 @@ export class GameWorld {
     this.projectiles.forEach((projectile) => projectile.update(dt));
   }
 
-  updateHealItems(dt) {
-    this.healItems.forEach((item) => item.update(dt));
+  updateSpecialItems(dt) {
+    this.specialItems.forEach((item) => item.update(dt));
   }
 
   updateSkill(dt) {
@@ -343,6 +348,10 @@ export class GameWorld {
 
   updateParticles(dt) {
     this.particles.forEach((particle) => particle.update(dt));
+  }
+
+  getEffectiveScoreMultiplier() {
+    return this.difficulty.scoreMultiplier * (this.scoreBoostTimer > 0 ? 2 : 1);
   }
 
   playerFire() {
@@ -389,6 +398,16 @@ export class GameWorld {
       } else {
         if (rectsOverlap(projectile, playerRect)) {
           projectile.dead = true;
+          if (this.player.isShielded()) {
+            if (this.player.absorbBarrierHit()) {
+              const x = this.player.x + this.player.w / 2;
+              const y = this.player.y + this.player.h / 2;
+              this.addParticles(x, y, COLORS.cyan, 18, { life: 0.38, size: 4 });
+              this.shake = Math.max(this.shake, 0.16);
+              this.audio.shieldHit();
+            }
+            return;
+          }
           if (this.player.takeDamage(projectile.damage)) {
             this.shake = 0.45;
             this.flash = 0.2;
@@ -409,18 +428,35 @@ export class GameWorld {
         }
       }
     });
-    this.healItems.forEach((item) => {
+    this.specialItems.forEach((item) => {
       if (item.dead || !rectsOverlap(item, playerRect)) return;
-      const healed = this.player.heal(1);
+      const x = item.x + item.w / 2;
+      const y = item.y + item.h / 2;
+      if (item.kind === 'heal') {
+        const healed = this.player.heal(1);
+        item.dead = true;
+        if (healed > 0) {
+          this.addParticles(x, y, COLORS.gold, 18, { life: 0.6, size: 4 });
+          this.addParticles(this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, '#8fffc3', 24, { life: 0.72, size: 3, vy: -45 });
+          this.flash = Math.max(this.flash, 0.16);
+          this.audio.heal();
+          this.onMessage?.('結界修復札を取得 — HP +1', 'skill');
+        }
+        return;
+      }
       item.dead = true;
-      if (healed > 0) {
-        const x = item.x + item.w / 2;
-        const y = item.y + item.h / 2;
-        this.addParticles(x, y, COLORS.gold, 18, { life: 0.6, size: 4 });
-        this.addParticles(this.player.x + this.player.w / 2, this.player.y + this.player.h / 2, '#8fffc3', 24, { life: 0.72, size: 3, vy: -45 });
-        this.flash = Math.max(this.flash, 0.16);
-        this.audio.heal();
-        this.onMessage?.('結界修復札を取得 — HP +1', 'skill');
+      if (item.kind === 'score') {
+        this.scoreBoostTimer = Math.min(12, this.scoreBoostTimer + this.difficulty.scoreBoostDuration);
+        this.addParticles(x, y, COLORS.gold, 24, { life: 0.72, size: 4 });
+        this.flash = Math.max(this.flash, 0.18);
+        this.audio.boost();
+        this.onMessage?.(`輝星増幅札を取得 — SCORE ×2 / ${this.scoreBoostTimer.toFixed(1)}秒`, 'skill');
+      } else if (item.kind === 'shield') {
+        this.player.grantBarrier(this.difficulty.shieldDuration);
+        this.addParticles(x, y, COLORS.cyan, 28, { life: 0.72, size: 4 });
+        this.flash = Math.max(this.flash, 0.2);
+        this.audio.shield();
+        this.onMessage?.(`無敵結界珠を取得 — BARRIER / ${this.player.barrierTimer.toFixed(1)}秒`, 'skill');
       }
     });
     if (this.player.dead) this.finish('gameOver');
@@ -430,21 +466,28 @@ export class GameWorld {
     const died = enemy.hit(damage);
     this.addParticles(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, enemy.type.accent, died ? 22 : 6, { life: died ? 0.6 : 0.2, size: died ? 4 : 2 });
     if (!died) return;
-    this.score += Math.round(enemy.value * this.difficulty.scoreMultiplier * (1 + Math.min(this.combo, 75) * 0.012));
+    this.score += Math.round(enemy.value * this.getEffectiveScoreMultiplier() * (1 + Math.min(this.combo, 75) * 0.012));
     this.combo += 1;
     this.comboTimer = 2.5;
     this.player.energy = clamp(this.player.energy + (skill ? 7 : 9) * this.difficulty.energyGain, 0, this.player.maxEnergy);
-    this.trySpawnHealPickup(enemy);
+    this.trySpawnSpecialPickup(enemy);
     this.audio.destroy();
   }
 
-  trySpawnHealPickup(enemy) {
-    if (this.player.hp >= this.player.maxHp || this.healItems.length >= 2) return;
-    if (Math.random() >= this.difficulty.healDropChance) return;
+  trySpawnSpecialPickup(enemy) {
+    if (this.specialItems.length >= 2) return;
+    const candidates = [];
+    if (this.player.hp < this.player.maxHp) candidates.push({ kind: 'heal', chance: this.difficulty.healDropChance, color: COLORS.gold });
+    candidates.push({ kind: 'score', chance: this.difficulty.scoreDropChance, color: COLORS.violet });
+    candidates.push({ kind: 'shield', chance: this.difficulty.shieldDropChance, color: COLORS.cyan });
+    const roll = Math.random();
+    let cursor = 0;
+    const selected = candidates.find((candidate) => { cursor += candidate.chance; return roll < cursor; });
+    if (!selected) return;
     const x = enemy.x + enemy.w / 2;
     const y = enemy.y + enemy.h / 2;
-    this.healItems.push(new HealPickup(x, y));
-    this.addParticles(x, y, COLORS.gold, 10, { life: 0.45, size: 3 });
+    this.specialItems.push(new SpecialPickup(x, y, selected.kind));
+    this.addParticles(x, y, selected.color, 10, { life: 0.45, size: 3 });
   }
 
   damageBoss(damage, skill) {
@@ -468,7 +511,7 @@ export class GameWorld {
     this.bossDefeatEffect = 1.55;
     this.bossDefeatOrigin = { x: bossX, y: bossY, kind: this.boss.kind, accent: this.boss.accent };
     this.projectiles.filter((projectile) => projectile.faction === 'enemy').forEach((projectile) => { projectile.dead = true; });
-    this.score += Math.round((this.boss.score + this.combo * 35) * this.difficulty.scoreMultiplier);
+    this.score += Math.round((this.boss.score + this.combo * 35) * this.getEffectiveScoreMultiplier());
     this.audio.clear();
     this.shake = 1;
     this.flash = 0.6;
@@ -543,7 +586,7 @@ export class GameWorld {
     this.input.clear();
     this.enemies = [];
     this.projectiles = [];
-    this.healItems = [];
+    this.specialItems = [];
     this.boss = null;
     this.createBarriers();
     this.player.energy = Math.max(this.player.energy, this.stage.restoreEnergy || 50);
@@ -625,7 +668,7 @@ export class GameWorld {
   cleanup() {
     this.enemies = this.enemies.filter((enemy) => !enemy.dead);
     this.projectiles = this.projectiles.filter((projectile) => !projectile.dead);
-    this.healItems = this.healItems.filter((item) => !item.dead);
+    this.specialItems = this.specialItems.filter((item) => !item.dead);
     this.particles = this.particles.filter((particle) => !particle.dead);
     this.barriers = this.barriers.filter((barrier) => !barrier.dead);
   }
@@ -693,7 +736,8 @@ class CanvasRenderer {
     world.enemies.forEach((enemy) => this.drawEnemy(enemy));
     if (world.boss && !world.boss.dead) this.drawBoss(world.boss);
     this.drawBossEffects(world);
-    this.drawHealItems(world.healItems);
+    this.drawSpecialItems(world.specialItems);
+    if (!world.player.dead && world.player.isShielded()) this.drawPlayerBarrier(world.player);
     if (!world.player.dead) this.drawPlayer(world.player);
     if (world.skillPulse) this.drawSkillPulse(world.skillPulse);
     this.drawCanvasHud(world);
@@ -1337,36 +1381,75 @@ class CanvasRenderer {
     });
   }
 
-  drawHealItems(items) {
+  drawSpecialItems(items) {
     const { ctx } = this;
     items.forEach((item) => {
       const cx = item.x + item.w / 2;
       const cy = item.y + item.h / 2;
       const pulse = 0.72 + Math.sin(item.t * 7) * 0.18;
+      const isScore = item.kind === 'score';
+      const isShield = item.kind === 'shield';
+      const ring = isScore ? COLORS.violet : isShield ? COLORS.cyan : '#8fffc3';
+      const ink = isScore ? COLORS.gold : isShield ? '#91ecff' : '#18bd83';
       ctx.save();
       ctx.globalCompositeOperation = 'screen';
       ctx.globalAlpha = pulse;
-      ctx.strokeStyle = 'rgba(143, 255, 195, .65)';
-      ctx.shadowColor = '#8fffc3';
+      ctx.strokeStyle = ring;
+      ctx.shadowColor = ring;
       ctx.shadowBlur = 16;
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(cx, cy, 19 + Math.sin(item.t * 5) * 3, 0, Math.PI * 2); ctx.stroke();
       ctx.globalCompositeOperation = 'source-over';
-      ctx.shadowColor = COLORS.gold;
+      ctx.shadowColor = ring;
       ctx.shadowBlur = 14;
-      ctx.fillStyle = 'rgba(255, 244, 204, .96)';
-      ctx.strokeStyle = COLORS.gold;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(cx - 10, cy - 15); ctx.lineTo(cx + 10, cy - 15); ctx.lineTo(cx + 10, cy + 12); ctx.lineTo(cx, cy + 17); ctx.lineTo(cx - 10, cy + 12); ctx.closePath();
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#18bd83';
-      ctx.fillRect(cx - 2, cy - 8, 4, 16);
-      ctx.fillRect(cx - 8, cy - 2, 16, 4);
-      ctx.fillStyle = COLORS.cyan;
-      ctx.fillRect(cx - 7, cy - 12, 14, 2);
+      if (isShield) {
+        ctx.fillStyle = 'rgba(20, 96, 156, .9)';
+        ctx.strokeStyle = COLORS.cyan;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let i = 0; i < 6; i += 1) {
+          const angle = -Math.PI / 2 + i * Math.PI / 3;
+          const px = cx + Math.cos(angle) * 15;
+          const py = cy + Math.sin(angle) * 15;
+          if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = '#e8feff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.stroke();
+      } else {
+        ctx.fillStyle = isScore ? 'rgba(44, 22, 78, .96)' : 'rgba(255, 244, 204, .96)';
+        ctx.strokeStyle = isScore ? COLORS.violet : COLORS.gold;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 10, cy - 15); ctx.lineTo(cx + 10, cy - 15); ctx.lineTo(cx + 10, cy + 12); ctx.lineTo(cx, cy + 17); ctx.lineTo(cx - 10, cy + 12); ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        if (isScore) {
+          ctx.fillStyle = COLORS.gold; ctx.font = '700 15px "Rajdhani", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('×2', cx, cy + 1);
+        } else {
+          ctx.fillStyle = ink; ctx.fillRect(cx - 2, cy - 8, 4, 16); ctx.fillRect(cx - 8, cy - 2, 16, 4); ctx.fillStyle = COLORS.cyan; ctx.fillRect(cx - 7, cy - 12, 14, 2);
+        }
+      }
       ctx.restore();
     });
+  }
+
+  drawPlayerBarrier(player) {
+    const { ctx } = this;
+    const cx = player.x + player.w / 2;
+    const cy = player.y + player.h / 2;
+    const ratio = Math.min(1, player.barrierTimer / 1.2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.34 + Math.sin(player.enginePulse * .9) * .1 + player.barrierPulse * .35;
+    ctx.strokeStyle = COLORS.cyan;
+    ctx.shadowColor = COLORS.cyan;
+    ctx.shadowBlur = 20;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(cx, cy, 42 + Math.sin(player.enginePulse) * 2, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 0.22 + ratio * .18;
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i += 1) { ctx.beginPath(); ctx.arc(cx, cy, 34 + i * 2, i * 1.05, i * 1.05 + .62); ctx.stroke(); }
+    ctx.restore();
   }
 
   drawProjectiles(projectiles) {
@@ -1452,10 +1535,22 @@ class CanvasRenderer {
     ctx.font = '700 10px "Noto Sans JP", sans-serif';
     ctx.fillStyle = world.difficulty.key === 'hard' ? COLORS.magenta : world.difficulty.key === 'easy' ? COLORS.gold : COLORS.cyan;
     ctx.fillText(`難度: ${world.difficulty.english}`, 26, 66);
-    if (world.healItems.length > 0) {
+    if (world.specialItems.length > 0) {
       ctx.fillStyle = '#8fffc3';
       ctx.shadowColor = '#8fffc3'; ctx.shadowBlur = 8;
-      ctx.fillText(`修復札 ×${world.healItems.length}`, 128, 66);
+      ctx.fillText(`補助具 ×${world.specialItems.length}`, 128, 66);
+      ctx.shadowBlur = 0;
+    }
+    if (world.scoreBoostTimer > 0) {
+      ctx.fillStyle = COLORS.gold;
+      ctx.shadowColor = COLORS.gold; ctx.shadowBlur = 8;
+      ctx.fillText(`SCORE ×2  ${world.scoreBoostTimer.toFixed(1)}s`, 26, 83);
+      ctx.shadowBlur = 0;
+    }
+    if (world.player.isShielded()) {
+      ctx.fillStyle = COLORS.cyan;
+      ctx.shadowColor = COLORS.cyan; ctx.shadowBlur = 8;
+      ctx.fillText(`BARRIER  ${world.player.barrierTimer.toFixed(1)}s`, 26, 98);
       ctx.shadowBlur = 0;
     }
 

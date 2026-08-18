@@ -45,6 +45,9 @@ export class Player {
     this.shotDamage = 1.2 * difficulty.playerDamage;
     this.invincible = 0;
     this.invincibilityDuration = difficulty.invincibility;
+    this.barrierTimer = 0;
+    this.barrierPulse = 0;
+    this.barrierHitCooldown = 0;
     this.energy = 0;
     this.maxEnergy = 100;
     this.skillCooldown = 0;
@@ -59,6 +62,9 @@ export class Player {
     this.x = clamp(this.x + horizontal * this.speed * dt, 18, GAME_WIDTH - this.w - 18);
     this.fireCooldown -= dt;
     this.invincible = Math.max(0, this.invincible - dt);
+    this.barrierTimer = Math.max(0, this.barrierTimer - dt);
+    this.barrierPulse = Math.max(0, this.barrierPulse - dt);
+    this.barrierHitCooldown = Math.max(0, this.barrierHitCooldown - dt);
     this.skillCooldown = Math.max(0, this.skillCooldown - dt);
     this.enginePulse += dt * 8;
   }
@@ -99,10 +105,27 @@ export class Player {
     this.hp = Math.min(this.maxHp, this.hp + amount);
     return this.hp - before;
   }
+
+  grantBarrier(duration) {
+    this.barrierTimer = Math.min(9, Math.max(this.barrierTimer, 0) + duration);
+    this.barrierPulse = 0.4;
+  }
+
+  isShielded() {
+    return this.barrierTimer > 0;
+  }
+
+  absorbBarrierHit() {
+    this.barrierPulse = 0.3;
+    if (this.barrierHitCooldown > 0) return false;
+    this.barrierHitCooldown = 0.35;
+    return true;
+  }
 }
 
-export class HealPickup {
-  constructor(x, y) {
+export class SpecialPickup {
+  constructor(x, y, kind = 'heal') {
+    this.kind = kind;
     this.x = x - 14;
     this.y = y - 12;
     this.w = 28;
