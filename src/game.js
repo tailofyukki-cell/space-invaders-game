@@ -1,5 +1,5 @@
-import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817m';
-import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817m';
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817n';
+import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817n';
 
 const TORII_GATE_LANES = Object.freeze([
   { x: 242, width: 112, gateX: 278, gateY: 228, scale: 0.86 },
@@ -212,6 +212,7 @@ export class GameWorld {
     this.bossDefeatEffect = 0;
     this.bossDefeatOrigin = null;
     this.toriiLightningEffect = null;
+    this.bossReliefGranted = false;
   }
 
   resize() {
@@ -293,6 +294,9 @@ export class GameWorld {
     }
 
     if (this.state === 'bossWarning') {
+      this.updateSpecialItems(dt);
+      this.resolveCollisions();
+      this.cleanup();
       this.bossWarning -= dt;
       if (this.bossWarning <= 0) this.spawnBoss();
       this.updateHud();
@@ -537,6 +541,39 @@ export class GameWorld {
     this.audio.destroy();
   }
 
+  grantEasyBossRelief() {
+    const relief = this.stage.easyBossRelief;
+    if (this.bossReliefGranted || this.difficulty.key !== 'easy' || !relief) return false;
+    this.bossReliefGranted = true;
+    if (this.player.hp >= this.player.maxHp) return false;
+
+    const x = this.player.x + this.player.w / 2;
+    const y = Math.max(156, this.player.y - 118);
+    const activeItems = this.specialItems.filter((item) => !item.dead);
+    const existingHeal = activeItems.find((item) => item.kind === relief.kind);
+    if (existingHeal) {
+      existingHeal.x = x - existingHeal.w / 2;
+      existingHeal.baseX = existingHeal.x;
+      existingHeal.y = y - existingHeal.h / 2;
+      existingHeal.life = Math.max(existingHeal.life, 2.5);
+      this.addParticles(x, y, COLORS.gold, 14, { life: 0.6, size: 4, vy: -28 });
+      this.onMessage?.('水鏡の補給札を回収しやすい位置へ転送しました。', 'skill');
+      return true;
+    }
+
+    if (activeItems.length >= 2) {
+      const replaceable = activeItems.find((item) => item.kind === 'score') || activeItems[0];
+      replaceable.dead = true;
+    }
+
+    this.specialItems.push(new SpecialPickup(x, y, relief.kind));
+    this.addParticles(x, y, COLORS.gold, 18, { life: 0.7, size: 4, vy: -28 });
+    this.flash = Math.max(this.flash, 0.12);
+    this.audio.heal();
+    this.onMessage?.(`見習い補給 — ${relief.message}`, 'skill');
+    return true;
+  }
+
   trySpawnSpecialPickup(enemy) {
     if (this.specialItems.length >= 2) return;
     const candidates = [];
@@ -606,10 +643,11 @@ export class GameWorld {
   beginWave() {
     const spec = this.stage.waves[this.waveIndex];
     if (!spec) {
+      const supplied = this.grantEasyBossRelief();
       this.state = 'bossWarning';
       this.bossWarning = 2.1;
       this.warningPulse = 2.1;
-      this.banner = { title: 'WARNING', text: `大型穢機《${this.stage.boss.name}》接近。結界を最大出力へ。`, time: 2.1, maxTime: 2.1 };
+      this.banner = { title: 'WARNING', text: supplied ? `大型穢機《${this.stage.boss.name}》接近。補給札を回収して備えよ。` : `大型穢機《${this.stage.boss.name}》接近。結界を最大出力へ。`, time: 2.1, maxTime: 2.1 };
       this.audio.boss();
       return;
     }
