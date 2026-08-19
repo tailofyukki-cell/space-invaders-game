@@ -248,6 +248,7 @@ export class Boss {
     this.score = score;
     this.fireRate = difficulty.bossFireRate;
     this.shotCount = difficulty.bossShotCount;
+    this.kappaTraining = kind === 'kappa' ? difficulty.kappaTraining || null : null;
     this.w = kind === 'yatagarasu' ? 258 : 236;
     this.h = kind === 'yatagarasu' ? 164 : 150;
     this.x = GAME_WIDTH / 2 - this.w / 2;
@@ -256,7 +257,7 @@ export class Boss {
     this.t = 0;
     this.phase = 'enter';
     this.fireTimer = 1.2;
-    this.pattern = 0;
+    this.pattern = this.kappaTraining ? 2 : 0;
     this.patternClock = 0;
     this.enraged = false;
     this.phaseTransition = 0;
@@ -266,6 +267,7 @@ export class Boss {
     this.gateTelegraphMax = 0;
     this.gateTarget = 0;
     this.gateStrike = 0;
+    this.kappaTelegraph = 0;
     this.pendingEvents = [];
     this.dead = false;
     this.flash = 0;
@@ -284,6 +286,11 @@ export class Boss {
       return [];
     }
     if (this.phaseTransition > 0) return [];
+    if (this.kappaTelegraph > 0) {
+      this.kappaTelegraph = Math.max(0, this.kappaTelegraph - dt);
+      if (this.kappaTelegraph <= 0) return this.attack();
+      return [];
+    }
     if (this.kind === 'orochi') {
       this.gateStrike = Math.max(0, this.gateStrike - dt);
       if (this.gateTelegraph > 0) {
@@ -309,13 +316,24 @@ export class Boss {
       : this.kind === 'yatagarasu'
         ? { sway: 238, xSpeed: 0.92, yAmp: 12, ySpeed: 2.15 }
         : { sway: 205, xSpeed: 0.68, yAmp: 7, ySpeed: 1.9 };
-    this.x = GAME_WIDTH / 2 - this.w / 2 + Math.sin(this.t * motion.xSpeed) * motion.sway;
-    this.y = this.targetY + Math.sin(this.t * motion.ySpeed) * motion.yAmp;
+    const motionScale = this.kappaTraining ? this.kappaTraining.motionScale : 1;
+    this.x = GAME_WIDTH / 2 - this.w / 2 + Math.sin(this.t * motion.xSpeed) * motion.sway * motionScale;
+    this.y = this.targetY + Math.sin(this.t * motion.ySpeed) * motion.yAmp * motionScale;
     this.fireTimer -= dt;
     this.patternClock += dt;
     if (this.fireTimer <= 0) {
-      this.fireTimer = ((this.hp < this.maxHp * 0.48 ? 0.55 : 0.85) * (this.enraged ? 0.72 : 1)) / this.fireRate;
-      this.pattern = (this.pattern + 1 + (this.enraged ? 1 : 0)) % 3;
+      const trainingInterval = this.kappaTraining
+        ? (this.enraged ? this.kappaTraining.phaseTwoInterval : this.kappaTraining.phaseOneInterval)
+        : null;
+      this.fireTimer = trainingInterval ?? ((this.hp < this.maxHp * 0.48 ? 0.55 : 0.85) * (this.enraged ? 0.72 : 1)) / this.fireRate;
+      this.pattern = (this.pattern + 1 + (this.enraged && !this.kappaTraining ? 1 : 0)) % 3;
+      if (this.kind === 'kappa') {
+        this.pendingEvents.push({ type: 'kappa-tell', pattern: this.pattern, phase: this.enraged ? 2 : 1 });
+        if (this.kappaTraining) {
+          this.kappaTelegraph = this.kappaTraining.telegraph;
+          return [];
+        }
+      }
       return this.attack();
     }
     return [];
@@ -332,23 +350,26 @@ export class Boss {
     const originX = this.x + this.w / 2;
     const originY = this.y + this.h - 12;
     if (this.kind === 'kappa') {
+      const training = this.kappaTraining;
+      const phaseIndex = this.enraged ? 1 : 0;
+      const speedScale = training ? training.projectileSpeed : 1;
       if (this.pattern === 0) {
-        const count = Math.max(5, Math.round(8 * this.shotCount * (this.enraged ? 1.25 : 1)));
+        const count = training ? training.fanCounts[phaseIndex] : Math.max(5, Math.round(8 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / Math.max(1, count - 1) - 0.5) * 0.92;
-          shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 175, vy: 205 + Math.cos(angle) * 62, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 11, h: 17, life: 4.4 }));
+          shots.push(new Projectile({ x: originX, y: originY, vx: Math.sin(angle) * 175 * speedScale, vy: (205 + Math.cos(angle) * 62) * speedScale, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 11, h: 17, life: 4.4 }));
         }
       } else if (this.pattern === 1) {
-        const count = Math.max(7, Math.round(11 * this.shotCount * (this.enraged ? 1.25 : 1)));
+        const count = training ? training.spiralCounts[phaseIndex] : Math.max(7, Math.round(11 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const angle = (i / count) * Math.PI * 1.36 + this.t * 1.7;
-          shots.push(new Projectile({ x: originX, y: originY, vx: Math.cos(angle) * 185, vy: 155 + Math.sin(angle) * 155, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 10, h: 16, life: 4.2 }));
+          shots.push(new Projectile({ x: originX, y: originY, vx: Math.cos(angle) * 185 * speedScale, vy: (155 + Math.sin(angle) * 155) * speedScale, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 10, h: 16, life: 4.2 }));
         }
       } else {
-        const count = Math.max(3, Math.round(6 * this.shotCount * (this.enraged ? 1.25 : 1)));
+        const count = training ? training.rainCounts[phaseIndex] : Math.max(3, Math.round(6 * this.shotCount * (this.enraged ? 1.25 : 1)));
         for (let i = 0; i < count; i += 1) {
           const offset = i - (count - 1) / 2;
-          shots.push(new Projectile({ x: originX + offset * 46, y: originY, vx: offset * 16, vy: 310, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 13, h: 23, life: 3.5 }));
+          shots.push(new Projectile({ x: originX + offset * 46, y: originY, vx: offset * 16 * speedScale, vy: 310 * speedScale, faction: 'enemy', style: 'boss-kappa', damage: 1, w: 13, h: 23, life: 3.5 }));
         }
       }
       return shots;
@@ -406,8 +427,8 @@ export class Boss {
     }
     if (!this.enraged && this.hp <= this.maxHp * 0.5) {
       this.enraged = true;
-      this.phaseTransition = 0.82;
-      this.fireTimer = 1.1;
+      this.phaseTransition = this.kappaTraining ? this.kappaTraining.phasePause : 0.82;
+      this.fireTimer = this.kappaTraining ? this.kappaTraining.phaseTwoInterval : 1.1;
       this.pattern = 2;
       this.flash = 0.62;
     }

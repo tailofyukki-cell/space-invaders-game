@@ -1,5 +1,5 @@
-import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817n';
-import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817n';
+import { COLORS, ENEMY_TYPES, GAME_HEIGHT, GAME_WIDTH, STAGES, STORAGE_KEYS, clamp, getDifficulty, rand, rectsOverlap } from './config.js?v=20260817o';
+import { Barrier, Boss, Enemy, SpecialPickup, Particle, Player } from './entities.js?v=20260817o';
 
 const TORII_GATE_LANES = Object.freeze([
   { x: 242, width: 112, gateX: 278, gateY: 228, scale: 0.86 },
@@ -371,6 +371,21 @@ export class GameWorld {
   }
 
   handleBossEvent(event) {
+    if (event.type === 'kappa-tell') {
+      const tells = [
+        '扇状水弾 — 中央から横へ退避。',
+        '渦水弾 — 水流の切れ目を見て移動。',
+        '落水弾 — 影のない横方向へ回避。',
+      ];
+      this.banner = {
+        title: event.phase === 2 ? 'WATER MIRROR — PHASE 02' : 'WATER MIRROR',
+        text: tells[event.pattern] || '水鏡の流れを見極めてください。',
+        time: 0.72,
+        maxTime: 0.72,
+      };
+      this.warningPulse = Math.max(this.warningPulse, 0.36);
+      return;
+    }
     if (event.type === 'torii-telegraph') {
       this.banner = { title: '月喰みの門', text: '鳥居の点灯したレーンから退避せよ。', time: Math.min(1.15, event.duration + 0.25), maxTime: Math.min(1.15, event.duration + 0.25) };
       this.warningPulse = Math.max(this.warningPulse, event.duration);

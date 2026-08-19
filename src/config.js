@@ -56,6 +56,17 @@ export const DIFFICULTIES = {
     stageHeal: 2,
     bossShieldDuration: 5.5,
     waveEnergyBonus: 18,
+    kappaTraining: {
+      motionScale: 0.78,
+      phaseOneInterval: 1.22,
+      phaseTwoInterval: 1.12,
+      phasePause: 1.35,
+      telegraph: 0.45,
+      fanCounts: [4, 5],
+      spiralCounts: [4, 5],
+      rainCounts: [2, 3],
+      projectileSpeed: 0.72,
+    },
     scoreMultiplier: 0.75,
   },
   normal: {
