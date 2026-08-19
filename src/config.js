@@ -207,6 +207,7 @@ export const STAGES = [
       { type: 'chochin', rows: 3, cols: 8, formation: 'march', gapX: 68, gapY: 52 },
       { type: 'hebi', rows: 3, cols: 7, formation: 'march', gapX: 74, gapY: 52 },
     ],
+    easyBossRelief: { kind: 'heal', label: '結界修復札', message: '水鏡の補給札を検出。河童戦の前に回収してください。' },
     boss: { kind: 'kappa', name: '蒼渦ノ河童', hp: 205, score: 7200, color: '#0c3159', accent: COLORS.cyan },
   },
   {
